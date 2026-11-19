@@ -97,6 +97,31 @@ select option { color: var(--text); background: #0b141b; }
 .key-status:not(.warn) { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; } /* read by screen readers */
 .key-status:empty { display: none; }
 .key-status.warn { color: #ffc98a; }
+.key-item.absent { cursor: default; }
+.key-item.absent span { text-decoration: line-through; text-decoration-color: rgba(255, 255, 255, .4); }
+
+/* ---- Coverage chart in each event card ---- */
+.coverage { position: relative; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
+.coverage:empty { display: none; }
+.coverage h3 { margin: 0 0 4px; color: var(--text); font-size: 13px; font-weight: 650; }
+.cov-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin: 0 0 6px !important; color: var(--muted) !important; font-size: 12px !important; line-height: 1.4 !important; }
+.coverage svg { display: block; overflow: visible; }
+.cov-grid line { stroke: rgba(255, 255, 255, .08); }
+.cov-axis text { fill: var(--muted); font-size: 10px; }
+.coverage .row { cursor: pointer; outline: none; }
+.coverage .row .hit { fill: transparent; }
+.coverage .row:hover .hit, .coverage .row:focus-visible .hit { fill: rgba(255, 255, 255, .06); }
+.coverage .row.selected .hit { fill: rgba(255, 180, 84, .14); }
+.coverage .row:focus-visible .hit { stroke: var(--accent); }
+.coverage .row.dimmed { opacity: .5; }
+.cov-label { fill: #dfe9ee; font-size: 12px; }
+.row.selected .cov-label { font-weight: 650; }
+.cov-value { fill: var(--muted); font-size: 11.5px; font-variant-numeric: tabular-nums; }
+.cov-grid line.zero { stroke: rgba(255, 255, 255, .35); }
+.cov-tip { position: absolute; left: 90px; z-index: 2; display: grid; gap: 2px; padding: 7px 9px; color: var(--text); background: rgba(5, 10, 15, .95); border: 1px solid var(--line); border-radius: 8px; font-size: 12px; line-height: 1.4; pointer-events: none; }
+.cov-tip[hidden] { display: none; }
+.cov-tip .muted { color: var(--muted); }
+.coverage .cov-note { margin-top: 6px !important; color: var(--muted) !important; font-size: 11.5px !important; line-height: 1.45 !important; }
 
 /* ---- Scrolling story, layered over everything ---- */
 .story { position: relative; z-index: 3; pointer-events: none; }
@@ -430,8 +455,8 @@ void main() {
      or the land underneath instead of smoke. Several categories can be selected at once. */
   const KEY = [
     {label:'Vegetation', name:'vegetation', swatch:'#3cb043'},
-    {label:'Burn scar', name:'burn scars', swatch:'#8a4430'},
-    {label:'Water, flooding', name:'water', swatch:'#123a6b'},
+    {label:'Burn scar', name:'burn scars', swatch:'#a5523a'},
+    {label:'Water, flooding', name:'water', swatch:'#2a64b8'},
     {label:'Bare soil, dry land', name:'bare soil', swatch:'#c8ad85'},
     {label:'Cloud', name:'cloud', swatch:'#eef5f3'},
     {label:'Ice cloud, snow', name:'ice cloud and snow', swatch:'#45cde3'},
@@ -458,6 +483,7 @@ void main() {
     return BARE;                                                                      // tan / pink
   }
   const selected = new Set();    // KEY indices shown in color; empty = show everything
+  const absent = new Set();      // KEY indices found in neither of the two images being compared
   let isolationAvailable = true; // false if the browser blocks reading pixels (e.g. opened via file://)
   let renderToken = 0;
   const pixelCache = new Map(), maskCache = new Map();
@@ -469,8 +495,10 @@ void main() {
       ctx.drawImage(img, 0, 0);
       const {data} = ctx.getImageData(0, 0, canvas.width, canvas.height); // throws if the canvas is tainted
       const cls = new Uint8Array(canvas.width * canvas.height);
-      for (let i = 0, p = 0; i < cls.length; i++, p += 4) cls[i] = classify(data[p], data[p+1], data[p+2], fireEvent);
-      return {width: canvas.width, height: canvas.height, data, cls};
+      const counts = new Uint32Array(KEY.length);
+      for (let i = 0, p = 0; i < cls.length; i++, p += 4) counts[cls[i] = classify(data[p], data[p+1], data[p+2], fireEvent)]++;
+      const share = Array.from(counts, c => c / cls.length);   // fraction of the image in each category
+      return {width: canvas.width, height: canvas.height, data, cls, share};
     }));
     return pixelCache.get(url);
   }
@@ -516,27 +544,118 @@ void main() {
     .append('button').attr('type', 'button').attr('class', 'key-item');
   keyButtons.append('i').style('background', d => d.swatch);
   keyButtons.append('span').text(d => d.label);
-  keyButtons.on('click', (event, d) => {
-    const i = KEY.indexOf(d);
-    if (selected.has(i)) selected.delete(i); else selected.add(i);
-    updateKey(); refresh();
-  });
+  keyButtons.on('click', (event, d) => toggleCategory(KEY.indexOf(d)));
   d3.select('#key-clear').on('click', () => { selected.clear(); updateKey(); refresh(); });
   const listFormat = new Intl.ListFormat('en', {type: 'conjunction'});
   const selectedLabels = () => listFormat.format(picksList().map(i => KEY[i].name));
   function updateKey() {
     const any = selected.size > 0;
+    const flood = FLOOD_EVENTS.has(current.id);
     keyButtons.attr('aria-pressed', (d, i) => String(selected.has(i)))
-      .attr('title', (d, i) => selected.has(i) ? `Remove ${d.name} from the selection` : any ? `Also show ${d.name}` : `Show only ${d.name}`)
-      .property('disabled', !isolationAvailable)
+      .attr('title', (d, i) => absent.has(i) ? (flood && (i === SMOKE || i === FIRE) ? `No ${d.name} in this flood event` : `No ${d.name} found on either date`)
+        : selected.has(i) ? `Remove ${d.name} from the selection` : any ? `Also show ${d.name}` : `Show only ${d.name}`)
+      .property('disabled', (d, i) => !isolationAvailable || absent.has(i))
+      .classed('absent', (d, i) => absent.has(i))
       .classed('dimmed', (d, i) => any && !selected.has(i))
       .transition().duration(200)
-      .style('opacity', (d, i) => !isolationAvailable || (any && !selected.has(i)) ? 0.55 : 1);
+      .style('opacity', (d, i) => !isolationAvailable || absent.has(i) ? 0.35 : any && !selected.has(i) ? 0.55 : 1);
+    coverageRows().classed('selected', d => selected.has(d.k)).classed('dimmed', d => any && !selected.has(d.k));
     d3.select('#key-clear').property('hidden', !any);
     d3.select('#key-status').classed('warn', !isolationAvailable).text(
       !isolationAvailable ? 'Color isolation needs the page to be served from a web server (it works on GitHub Pages; locally, run “python3 -m http.server” in the project folder).'
       : !any ? ''
       : `Showing only ${selectedLabels()} in color; the rest is grayscale. Pixels are sorted by their band values, so edges and thin haze are approximate.`);
+  }
+
+  /* ---- Coverage chart (D3): how much of each image falls in each category, left date vs right date ----
+     One row per category: a bar for the change in share (percentage points) on a diverging axis centered at
+     zero, with the share on each date written beside it.
+     Categories found in neither image are left out of the chart and disabled in the key. */
+  const pct = d3.format('.1%');
+  const pctShort = v => v < 0.001 && v > 0 ? '<0.1%' : pct(v);
+  const MIN_SHARE = 0.0005;      // below 0.05% of the image (~300 pixels) counts as "not found"
+  function coverageRows() { return d3.selectAll('.coverage g.row'); }
+  let coverageToken = 0;
+  function toggleCategory(k) {
+    if (absent.has(k)) return;
+    if (selected.has(k)) selected.delete(k); else selected.add(k);
+    updateKey(); refresh();
+  }
+  function updateCoverage(left, right) {
+    const token = ++coverageToken, e = current, fireEvent = !FLOOD_EVENTS.has(e.id);
+    const box = d3.selectAll('.card .coverage').filter(d => d.event === e);
+    Promise.all([loadPixels(fileFor(e, left[0], 'false'), fireEvent), loadPixels(fileFor(e, right[0], 'false'), fireEvent)])
+      .then(([a, b]) => {
+        if (token !== coverageToken) return;
+        const rows = KEY.map((d, k) => ({k, d, a: a.share[k], b: b.share[k]}));
+        absent.clear();
+        rows.forEach(r => { if (r.a < MIN_SHARE && r.b < MIN_SHARE) absent.add(r.k); });
+        const dropped = [...selected].filter(k => absent.has(k));
+        dropped.forEach(k => selected.delete(k));
+        renderCoverage(box, rows.filter(r => !absent.has(r.k)), rows.filter(r => absent.has(r.k)), left, right, fireEvent);
+        updateKey();
+        if (dropped.length) refresh();
+      })
+      .catch(() => { if (token === coverageToken) box.html('').append('p').attr('class', 'cov-note').text('The coverage chart needs the page served from a web server, like the color isolation.'); });
+  }
+  function renderCoverage(box, rows, missing, left, right, fireEvent) {
+    box.html('');
+    box.append('h3').text('What changed between the two dates');
+    box.append('p').attr('class', 'cov-legend').text(`Change in each category’s share of the image, in percentage points, from ${left[1]} to ${right[1]}. Right: the share on each date.`);
+
+    const width = Math.max(260, box.node().clientWidth || 356), rowH = 21, top = 18;
+    const labelW = 84, valueW = 104, x0 = labelW + 8, x1 = width - valueW - 12;
+    const height = top + rows.length * rowH + 4;
+    // Diverging axis: change in share (percentage points), symmetric around zero.
+    const maxDelta = d3.max(rows, r => Math.abs(r.b - r.a)) || 0.01;
+    const x = d3.scaleLinear([-maxDelta, maxDelta], [x0, x1]).nice(4);
+    const svg = box.append('svg').attr('viewBox', `0 0 ${width} ${height}`).attr('width', width).attr('height', height)
+      .attr('role', 'img')
+      .attr('aria-label', `Share of each image by category, ${left[1]} to ${right[1]}: ` + rows.map(r => `${r.d.name} ${pctShort(r.a)} to ${pctShort(r.b)}`).join('; ') + '.');
+    const ticks = x.ticks(4), pts = v => v === 0 ? '0' : `${v > 0 ? '+' : '−'}${d3.format('.2~f')(Math.abs(v) * 100)}`;
+    svg.append('g').attr('class', 'cov-grid').selectAll('line').data(ticks).join('line').classed('zero', d => d === 0)
+      .attr('x1', x).attr('x2', x).attr('y1', top - 4).attr('y2', height - 2);
+    svg.append('g').attr('class', 'cov-axis').selectAll('text').data(ticks).join('text')
+      .attr('x', x).attr('y', 10).attr('text-anchor', 'middle').text(pts);
+
+    const row = svg.selectAll('g.row').data(rows, r => r.k).join('g').attr('class', 'row')
+      .attr('transform', (r, i) => `translate(0,${top + i * rowH})`);
+    row.append('rect').attr('class', 'hit').attr('x', 0).attr('width', width).attr('height', rowH).attr('rx', 6);
+    row.append('text').attr('class', 'cov-label').attr('x', 6).attr('y', rowH / 2).attr('dy', '0.35em').text(r => r.d.label.split(',')[0]);
+    // Bar from zero to the change, square at the zero line and rounded at the data end.
+    const barH = 10, rad = 3;
+    row.append('path').attr('class', 'cov-bar').attr('fill', r => r.d.swatch).attr('d', r => {
+      const z = x(0), e = x(r.b - r.a), y = (rowH - barH) / 2, w = Math.abs(e - z);
+      if (w < 1) return `M${z - 1},${y}h2v${barH}h-2z`;               // no change: a hairline at zero
+      const rr = Math.min(rad, w), dir = e > z ? 1 : -1;
+      return `M${z},${y}H${e - dir * rr}a${rr},${rr} 0 0 ${dir > 0 ? 1 : 0} ${dir * rr},${rr}V${y + barH - rr}a${rr},${rr} 0 0 ${dir > 0 ? 1 : 0} ${-dir * rr},${rr}H${z}z`;
+    });
+    row.append('text').attr('class', 'cov-value').attr('x', width - 6).attr('y', rowH / 2).attr('dy', '0.35em').attr('text-anchor', 'end')
+      .text(r => `${pctShort(r.a)} → ${pctShort(r.b)}`);
+
+    // Hover tooltip and click-to-isolate, linked to the key.
+    const tip = box.append('div').attr('class', 'cov-tip').attr('hidden', true);
+    const change = r => { const dv = (r.b - r.a) * 100; return Math.abs(dv) < 0.05 ? 'about the same' : `${dv > 0 ? '+' : '−'}${Math.abs(dv).toFixed(1)} percentage points`; };
+    row.attr('tabindex', 0).attr('role', 'button').attr('aria-label', r => `${r.d.name}: ${pctShort(r.a)} on ${left[1]}, ${pctShort(r.b)} on ${right[1]}. Press to isolate.`)
+      .on('pointerenter focus', (event, r) => {
+        tip.attr('hidden', null).html('');
+        tip.append('strong').text(r.d.label);
+        tip.append('span').text(`${left[1]}: ${pct(r.a)}`);
+        tip.append('span').text(`${right[1]}: ${pct(r.b)}`);
+        tip.append('span').attr('class', 'muted').text(`${change(r)} · click to ${selected.has(r.k) ? 'remove from' : 'isolate in'} the images`);
+        const i = rows.indexOf(r);
+        tip.style('top', `${svg.node().offsetTop + top + (i + 1) * rowH + 4}px`);
+      })
+      .on('pointerleave blur', () => tip.attr('hidden', true))
+      .on('click', (event, r) => toggleCategory(r.k))
+      .on('keydown', (event, r) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); toggleCategory(r.k); } });
+
+    const notes = [];
+    if (missing.length) notes.push(`Not found on either date: ${listFormat.format(missing.map(r => r.d.name))}${!fireEvent && missing.some(r => r.k === SMOKE || r.k === FIRE) ? ' (no fires in a flood event)' : ''}.`);
+    notes.push('Share of pixels in each category of the false-color images, so clouds hide the ground under them.');
+    box.append('p').attr('class', 'cov-note').text(notes.join(' '));
+    const any = selected.size > 0;
+    row.classed('selected', r => selected.has(r.k)).classed('dimmed', r => any && !selected.has(r.k));
   }
 
 
@@ -546,6 +665,7 @@ void main() {
     const right = current.dates.find(d => d[0] === rightSelect.property('value'));
     const b = band();
     setImages(fileFor(current, left[0], b), fileFor(current, right[0], b), b);
+    updateCoverage(left, right);
     d3.select('#left-label').call(setLabel, 'LEFT', left);
     d3.select('#right-label').call(setLabel, 'RIGHT', right);
     const iso = b === 'false' && selected.size ? `, showing only ${selectedLabels()} in color` : '';
@@ -602,6 +722,7 @@ void main() {
   eventCards.append('h2').text(d => d.event.title);
   eventCards.append('p').text(d => d.event.summary);
   eventCards.append('p').attr('class', 'try').html(d => `<strong>Try it:</strong> ${d.event.hint}`);
+  eventCards.append('div').attr('class', 'coverage').attr('aria-live', 'polite');
   eventCards.append('p').append('a').attr('href', d => d.event.source).attr('target', '_blank').attr('rel', 'noopener noreferrer').text('NASA event context ↗');
   const km = d => d3.format(',')(Math.round(d3.geoDistance(d.from.center, d.to.center) * 6371 / 100) * 100);
   const travelCards = generated.filter(d => d.kind === 'travel').append('div').attr('class', 'card glass');
@@ -620,8 +741,22 @@ void main() {
   stopButtons.append('span').attr('class', 'label').text(d => d.label);
   function scrollToStop(d) {
     const node = steps.filter(s => s.kind === d.kind && (d.kind !== 'event' || s.event === d.event)).node();
-    const top = d.kind === 'hero' ? 0 : node.getBoundingClientRect().top + window.scrollY - (d.kind === 'event' ? window.innerHeight * 0.3 : 0);
-    window.scrollTo({top, behavior: reduceMotion ? 'auto' : 'smooth'});
+    // Wide screens: the event card (with its coverage chart) sits just under the top bar so all of it fits.
+    const top = d.kind === 'hero' ? 0
+      : d.kind === 'event' && window.innerWidth >= 900 ? node.querySelector('.card').getBoundingClientRect().top + window.scrollY - 86
+      : node.getBoundingClientRect().top + window.scrollY - (d.kind === 'event' ? window.innerHeight * 0.3 : 0);
+    // Jump the page straight there (no scrolling through the stops in between) and fly the camera
+    // from wherever it is now directly to the new stop.
+    const from = lastView;
+    window.scrollTo({top, behavior: 'auto'});
+    smoothY = window.scrollY;
+    if (reduceMotion || !from) { flight = null; return; }
+    const dest = viewFromScroll();
+    const angle = d3.geoDistance(from.center, dest.center);                 // radians, 0..π
+    const zoomed = Math.max(from.z, dest.z);
+    if (angle < 1e-3 && Math.abs(from.z - dest.z) < 1e-3) { flight = null; return; }
+    flight = {from, start: performance.now(), scrollTop: window.scrollY,
+      duration: 1200 + 1400 * (angle / Math.PI) + 1000 * zoomed};          // longer trips take longer
   }
   stopButtons.on('click', (event, d) => scrollToStop(d));
 
@@ -647,6 +782,24 @@ void main() {
     const comp = a && b ? (p < 0.5 ? 1 - clamp01(p / 0.06) : clamp01((p - 0.94) / 0.06)) : b ? clamp01((p - 0.94) / 0.06) : 1 - clamp01(p / 0.06);
     return {center: d3.geoInterpolate(ca, cb)(turn), scale, stretch: 1 + (ev.stretch - 1) * z * z, z,
       A: a || b, B: a && b ? b : null, worldA: a || b, worldB: b || a, mix: a && b ? clamp01((p - 0.4) / 0.2) : 0, comp, target};
+  }
+  // A flight from the top-bar buttons or the globe markers: zoom out of the current view, turn along the
+  // great circle to the destination, zoom in. The destination is the view for the (already jumped-to)
+  // scroll position, so when the flight ends the scroll-driven camera takes over with no jump.
+  let flight = null, lastView = null;
+  function flightView(f, dest, p) {
+    const a = f.from;
+    const out = ease(clamp01(p / 0.4)), turn = ease(clamp01((p - 0.2) / 0.6)), inn = ease(clamp01((p - 0.6) / 0.4));
+    const lerpLog = (x, y, t) => Math.exp(Math.log(x) + (Math.log(y) - Math.log(x)) * t);
+    const first = p < 0.5;
+    const scale = first ? lerpLog(a.scale, globeScale, out) : lerpLog(globeScale, dest.scale, inn);
+    const stretch = first ? a.stretch + (1 - a.stretch) * out : 1 + (dest.stretch - 1) * inn * inn;
+    const z = first ? a.z * (1 - out) : dest.z * inn;
+    const srcEvent = a.mix < 0.5 ? a.A : (a.B || a.A), srcWorld = a.mix < 0.5 ? a.worldA : a.worldB;
+    const comp = first ? a.comp * (1 - clamp01(p / 0.06)) : dest.comp * clamp01((p - 0.94) / 0.06);
+    return {center: d3.geoInterpolate(a.center, dest.center)(turn), scale, stretch, z,
+      A: srcEvent, B: dest.A !== srcEvent ? dest.A : null, worldA: srcWorld, worldB: dest.mix < 0.5 ? dest.worldA : dest.worldB,
+      mix: clamp01((p - 0.4) / 0.2), comp, target: first ? a.target : dest.target, spin: dest.spin, stop: dest.stop};
   }
   // The camera follows a smoothed copy of the scroll position, so a quick flick of the wheel glides.
   let smoothY = window.scrollY;
@@ -831,7 +984,13 @@ void main() {
     const dt = Math.min(0.1, (now - lastTime) / 1000); lastTime = now;
     const gap = window.scrollY - smoothY;
     smoothY = Math.abs(gap) < 0.5 || reduceMotion ? window.scrollY : smoothY + gap * (1 - Math.exp(-dt * 7));
-    const v = viewFromScroll();
+    let v = viewFromScroll();
+    if (flight) {
+      // Scrolling by hand during a flight hands the camera straight back to the scroll position.
+      const p = Math.abs(window.scrollY - flight.scrollTop) > 4 ? 1 : (now - flight.start) / flight.duration;
+      if (p >= 1) flight = null; else v = flightView(flight, v, Math.max(0, p));
+    }
+    lastView = v;
     if (!reduceMotion && v.spin === 'hero') heroLon -= 4 * dt;
     if (!reduceMotion && v.spin === 'outro') outroLon -= 4 * dt;
     const key = [v.center[0].toFixed(4), v.center[1].toFixed(4), v.scale.toFixed(2), v.stretch.toFixed(4), v.mix.toFixed(3), v.comp.toFixed(3), band()].join();
