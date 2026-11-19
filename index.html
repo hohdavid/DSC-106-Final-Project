@@ -30,14 +30,15 @@ button:focus-visible, select:focus-visible, input:focus-visible, a:focus-visible
 .no-webgl #globe { display: none; }
 .no-webgl body, .no-webgl { background: radial-gradient(circle at 70% 30%, #0d1830, #03060a 60%); }
 .marker { cursor: pointer; pointer-events: auto; }
-.marker circle.dot { fill: var(--accent); stroke: #10202a; stroke-width: 1.5; }
-.marker circle.pulse { fill: none; stroke: var(--accent); stroke-width: 1.5; transform-box: fill-box; transform-origin: center; animation: pulse 2.4s ease-out infinite; }
+.marker circle.dot { fill: var(--c, var(--accent)); stroke: #10202a; stroke-width: 1.5; }
+.marker circle.pulse { fill: none; stroke: var(--c, var(--accent)); stroke-width: 1.5; transform-box: fill-box; transform-origin: center; animation: pulse 2.4s ease-out infinite; }
 .marker text { fill: #fff; font-size: 14px; font-weight: 600; paint-order: stroke; stroke: rgba(3, 6, 10, 0.85); stroke-width: 4px; }
 @keyframes pulse { from { transform: scale(1); opacity: .9; } to { transform: scale(3.2); opacity: 0; } }
 .fallback-sphere { fill: #0b2233; stroke: #6f9fb3; }
 .fallback-land { fill: #4b6150; }
 
 .stage { position: fixed; inset: 0; z-index: 2; pointer-events: none; }
+.stage-top { z-index: 4; } /* the top bar stays above the scrolling story cards */
 .topbar { position: absolute; top: 12px; left: 16px; right: 16px; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 7px 10px 7px 16px; pointer-events: auto; }
 .brand { color: var(--text); font-size: 13px; font-weight: 650; letter-spacing: .02em; text-decoration: none; white-space: nowrap; }
 .stops { display: flex; gap: 4px; margin: 0; padding: 0; list-style: none; }
@@ -46,7 +47,21 @@ button:focus-visible, select:focus-visible, input:focus-visible, a:focus-visible
 .stops button:hover { color: var(--text); }
 .stops button[aria-current="step"] { color: #10202a; background: var(--accent); }
 .stops button[aria-current="step"]::before { opacity: 1; }
-@media (max-width: 1280px) { .stops button:not([aria-current]) .label { display: none; } .stops button { padding: 6px 8px; } }
+.stops { align-items: center; }
+.stops button.stop::before { background: var(--c, currentColor); opacity: .85; }
+.stops button.stop[aria-current="step"] { background: var(--c, var(--accent)); }
+.stops button.stop[aria-current="step"]::before { background: #10202a; opacity: .55; }
+.stops button.stop:not([aria-current]) { padding: 6px 7px; }
+.stops li.event-stop button:not([aria-current]) .label { display: none; }
+.stops li.event-stop button.stop.chapter-open:not([aria-current]) { padding: 6px 10px; }
+.stops li.event-stop button.stop.chapter-open:not([aria-current]) .label { display: inline; }
+.stops li.chapter { margin-left: 6px; padding-left: 8px; border-left: 1px solid var(--line); }
+.stops .chapter-btn { padding: 4px 4px; color: var(--c); background: none; border: 0; font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; cursor: pointer; }
+.stops .chapter-btn::before { content: none; }
+.chapter-btn:hover { text-decoration: underline; text-underline-offset: 3px; }
+.chapter-blurb { margin-bottom: 10px; color: #dfe9ee !important; }
+@media (max-width: 1240px) { .brand { display: none; } }
+@media (max-width: 1100px) { .stops button:not([aria-current]) .label { display: none; } .stops button { padding: 6px 7px; } .brand { display: none; } }
 .segmented { display: flex; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; }
 fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
 .segmented label { cursor: pointer; font-size: 12px; font-weight: 600; }
@@ -161,8 +176,10 @@ footer { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10
 /* ---- Small screens: frame and controls at the top, story cards rise from the bottom ---- */
 @media (max-width: 899px) {
   .topbar { top: 8px; left: 8px; right: 8px; padding: 6px 8px; gap: 8px; }
-  .brand, .stops .label { display: none; }
-  .stops button { padding: 6px 7px; }
+  .brand, .stops .label, .stops li.chapter { display: none; }
+  .stops button, .stops button.stop:not([aria-current]), .stops li.event-stop button.stop.chapter-open:not([aria-current]) { padding: 6px 5px; }
+  .stops li.event-stop button.stop.chapter-open:not([aria-current]) .label { display: none; }
+  .stops { gap: 0; }
   .segmented label > span { padding: 6px 9px; }
   .segmented .long { display: none; }
   .step { width: auto; margin: 0 10px; }
@@ -177,6 +194,7 @@ footer { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10
   .key-title { display: none; }
   .image-label small { display: none; }
 }
+@media (max-width: 480px) { .short-hide { display: none; } .topbar { gap: 4px; } }
 @media (prefers-reduced-motion: reduce) {
   .marker circle.pulse, .scroll-cue span { animation: none; }
 }
@@ -281,12 +299,14 @@ void main() {
 <body>
 <canvas id="globe" aria-hidden="true"></canvas>
 <svg id="globe-overlay" aria-hidden="true"><g class="fallback-globe"></g><g class="markers"></g></svg>
-<div class="stage">
+<div class="stage stage-top">
   <nav class="topbar glass" aria-label="Story navigation">
     <a class="brand" href="#top">Landscape change from orbit</a>
     <ol class="stops" id="stops"></ol>
-    <fieldset class="bands"><legend class="visually-hidden">Image type</legend><div class="segmented"><label><input type="radio" name="bands" value="true"><span>Natural<span class="long"> color</span></span></label><label><input type="radio" name="bands" value="false" checked><span>False color<span class="long"> · 7-2-1</span></span></label></div></fieldset>
+    <fieldset class="bands"><legend class="visually-hidden">Image type</legend><div class="segmented"><label><input type="radio" name="bands" value="true"><span>Natural<span class="long"> color</span></span></label><label><input type="radio" name="bands" value="false" checked><span>False<span class="short-hide"> color</span><span class="long"> · 7-2-1</span></span></label></div></fieldset>
   </nav>
+</div>
+<div class="stage">
   <section class="frame" id="frame" aria-label="Satellite image comparison">
     <div id="viewer" class="viewer"><img class="fallback" src="assets/dixie-2021-09-21-false.jpg" alt="MODIS false-color image of the Dixie Fire region on September 21, 2021"></div>
     <div class="image-label left" id="left-label"></div><div class="image-label right" id="right-label"></div>
@@ -314,10 +334,10 @@ void main() {
 <main class="story" id="story">
   <section class="step step-hero" id="top">
     <div class="card hero-card glass">
-      <p class="kicker">NASA MODIS · five events</p>
+      <p class="kicker">NASA MODIS · fire, water, earth, ice</p>
       <h1>How do wildfires and floods change the landscape?</h1>
       <p class="subtitle">NASA MODIS Terra corrected reflectance, rendered by NASA GIBS at 960 × 640 px. Each event keeps one fixed area across 4–5 hand-picked dates; images are not otherwise processed.</p>
-      <p class="intro">Scroll to fly between five events on the globe, or drag the globe to spin it. At each stop, drag the divider to compare two dates, and click one or more colors in the key to isolate them.</p>
+      <p class="intro">Scroll to fly through seven natural disasters in four chapters, or drag the globe to spin it. At each stop, drag the divider to compare two dates, and click one or more colors in the key to isolate them.</p>
       <p class="scroll-cue">Scroll to begin <span aria-hidden="true">↓</span></p>
     </div>
   </section>
@@ -375,29 +395,67 @@ void main() {
       ['2024-05-06','May 6, 2024','During the flooding; NASA used this date to show the flooded area.'],
       ['2024-05-14','May 14, 2024','About a week later; clouds cover the northern part of the view.'],
       ['2024-06-12','June 12, 2024','A later observation; scattered clouds are present.']]},
-    {id:'kangaroo', title:'Kangaroo Island fires · Australia, 2019–2020', summary:'NASA’s Terra satellite showed burn scars across about a third of the island by January 7, 2020.', source:'https://earthobservatory.nasa.gov/images/146132/fires-ravage-kangaroo-island', left:0, right:2, dates:[
+    {id:'kangaroo', title:'Kangaroo Island fires · Australia, 2019–2020', summary:'NASA’s Terra satellite showed burn scars across about a third of the island by January 7, 2020.', source:'https://earthobservatory.nasa.gov/images/146132/fires-ravage-kangaroo-island', left:0, right:3, dates:[
       ['2019-12-16','December 16, 2019','Before the large fires; NASA used this date as its “before” image.'],
       ['2020-01-03','January 3, 2020','Fires burning; smoke drifts from the western part of the island.'],
       ['2020-01-07','January 7, 2020','NASA reported burn scars on about a third of the island, with some areas still burning.'],
-      ['2020-01-14','January 14, 2020','A week later; low clouds cover the sea to the south.'],
-      ['2020-02-04','February 4, 2020','About a month later; clouds cover part of the south coast.']]}
+      ['2020-01-14','January 14, 2020','A week later, the burn scar reaches further east across the island; low clouds cover the sea to the south.'],
+      ['2020-02-04','February 4, 2020','About a month later; clouds cover part of the south coast.']]},
+    {id:'tohoku', title:'Tōhoku earthquake and tsunami · Japan, 2011', summary:'The March 11, 2011 earthquake sent a tsunami as much as five kilometers inland along the coast near Sendai. NASA compared Terra images from February 26 and March 12.', source:'https://science.nasa.gov/earth/earth-observatory/flooding-from-tsunami-near-sendai-japan-49630', left:0, right:1, dates:[
+      ['2011-02-26','February 26, 2011','Two weeks before; NASA used this date as its reference image.'],
+      ['2011-03-12','March 12, 2011','The day after the tsunami; dark flood water covers the coastal plain.'],
+      ['2011-03-13','March 13, 2011','Two days after; a thin layer of cloud lies over the sea.'],
+      ['2011-03-24','March 24, 2011','Nearly two weeks after the tsunami.'],
+      ['2011-04-01','April 1, 2011','Three weeks later; NASA noted pockets of water still lingering.']]},
+    {id:'iceland', title:'Eyjafjallajökull eruption · Iceland, 2010', summary:'On April 14, 2010 the volcano beneath the Eyjafjallajökull ice cap began erupting ash. Over the next days Terra watched the plume stream across the North Atlantic, and the ash closed airspace across much of Europe.', source:'https://science.nasa.gov/earth/earth-observatory/ash-plume-across-the-north-atlantic-43670/', left:0, right:3, dates:[
+      ['2010-03-29','March 29, 2010','Two weeks before the explosive eruption; clouds cover much of the south.'],
+      ['2010-04-14','April 14, 2010','The day the explosive eruption began beneath the ice cap.'],
+      ['2010-04-15','April 15, 2010','NASA’s image of the ash plume blowing east-southeast toward the Faroe Islands.'],
+      ['2010-04-19','April 19, 2010','A broad brown ash plume streams south over the Atlantic.'],
+      ['2010-05-11','May 11, 2010','Almost a month later, ash still streams south from the volcano.']]},
+    {id:'petermann', title:'Petermann Glacier calving · Greenland, 2010', summary:'On August 5, 2010, an ice island of about 250 square kilometers, roughly four times the size of Manhattan, broke off Petermann Glacier in northwest Greenland. NASA compared Terra images from July 28 and August 5.', source:'https://science.nasa.gov/earth/earth-observatory/ice-island-calves-off-petermann-glacier-45112', left:0, right:1, dates:[
+      ['2010-07-28','July 28, 2010','Before the calving; NASA used this date as its “before” image.'],
+      ['2010-08-05','August 5, 2010','The ice island has broken away in the fjord; clouds cover the west.'],
+      ['2010-08-11','August 11, 2010','The ice island drifts down the fjord.'],
+      ['2010-08-16','August 16, 2010','Eleven days after the calving; the ice island is leaving the fjord.'],
+      ['2010-08-20','August 20, 2010','Two weeks after the calving.']]}
   ];
-  // Tour order: eastward around the world.
-  const ORDER = ['dixie', 'riogrande', 'kenya', 'pakistan', 'kangaroo'];
-  events.sort((a, b) => ORDER.indexOf(a.id) - ORDER.indexOf(b.id));
+  // Tour order: four chapters (fire, water, earth, ice), traveling around the world within each.
+  const ORDER = ['dixie', 'kangaroo', 'riogrande', 'pakistan', 'tohoku', 'iceland', 'petermann'];
+  events.splice(0, events.length, ...ORDER.map(id => events.find(e => e.id === id)));
   // Image extents come from download_imagery.sh (EPSG:4326 bounding boxes: [west, south, east, north]).
+  // Default dates (left, right in the events above): for each event, the pair of dates with the most change in its key
+  // category, using the color key's rules and counting only pixels clear of cloud and smoke on both dates: new burn
+  // scar (fire stops), land turned to water (floods, tsunami), glacier ice turned to open water (Petermann) and new
+  // volcanic ash (Eyjafjallajökull). Earlier date on the left.
   const EXTRA = {
-    dixie: {short: 'Dixie Fire', nav: 'Dixie Fire', bbox: [-122.0, 39.4, -120.5, 40.4],
+    dixie: {chapter: 'fire', short: 'Dixie Fire', nav: 'Dixie Fire', bbox: [-122.0, 39.4, -120.5, 40.4],
       hint: 'Click <b>Burn scar</b> in the key, then drag the divider between July 10 and September 21 to see where the fire burned.'},
-    pakistan: {short: 'Indus River floods', nav: 'Indus River', bbox: [68.5, 27.7, 70.45, 29.0],
+    pakistan: {chapter: 'water', short: 'Indus River floods', nav: 'Indus River', bbox: [68.5, 27.7, 70.45, 29.0],
       hint: 'Click <b>Water, flooding</b> in the key and compare September 1 with September 13 to see the river spread.'},
-    kenya: {short: 'Mount Kenya fire', nav: 'Mount Kenya', bbox: [36.65, -0.45, 37.85, 0.35],
-      hint: 'Clouds cover much of this area. Switch the right image to February 27, when NASA documented the active fire and a burn scar.'},
-    riogrande: {short: 'Rio Grande do Sul floods', nav: 'Rio Grande do Sul', bbox: [-53.0, -30.8, -50.0, -28.8],
+    riogrande: {chapter: 'water', short: 'Rio Grande do Sul floods', nav: 'Rio Grande do Sul', bbox: [-53.0, -30.8, -50.0, -28.8],
       hint: 'Click <b>Water, flooding</b> in the key, then compare April 20 with May 6 to see the rivers spread across their valleys.'},
-    kangaroo: {short: 'Kangaroo Island fires', nav: 'Kangaroo Island', bbox: [136.3, -36.52, 138.31, -35.18],
-      hint: 'Click <b>Burn scar</b> in the key and compare December 16 with January 7 to see how much of the island burned.'}
+    kangaroo: {chapter: 'fire', short: 'Kangaroo Island fires', nav: 'Kangaroo Island', bbox: [136.3, -36.52, 138.31, -35.18],
+      globeDate: '2020-01-07',  // the globe's surroundings come from this date's downloads (download_globe.sh)
+      hint: 'Click <b>Burn scar</b> in the key and compare December 16 with January 14 to see how much of the island burned.'},
+    // The three newer extents are as wide as they are tall on the ground (longitude span = 1.5 × latitude span
+    // ÷ cos(latitude)), so the 960×640 images aren't stretched and the globe lines up without stretching.
+    tohoku: {chapter: 'earth', short: 'Tōhoku tsunami', nav: 'Tōhoku', bbox: [139.81, 37.55, 142.09, 38.75],
+      hint: 'Click <b>Water, flooding</b> in the key and compare February 26 with March 12: the new water is the dark strip along the coast.'},
+    iceland: {chapter: 'earth', short: 'Eyjafjallajökull', nav: 'Eyjafjallajökull', bbox: [-26.0, 60.0, -6.2, 66.0], ash: true,
+      globeDate: '2010-04-15',  // the globe's surroundings come from this date's downloads (download_globe.sh)
+      hint: 'Click <b>Volcanic ash</b>, then drag the divider most of the way left: on April 19 the plume streams south from the volcano, which sits left of center.'},
+    petermann: {chapter: 'ice', short: 'Petermann Glacier', nav: 'Petermann Glacier', bbox: [-66.7, 80.3, -55.3, 81.5],
+      hint: 'Click <b>Water, flooding</b> and drag the divider between July 28 and August 5: where the end of the glacier’s floating tongue was, there is now open water.'}
   };
+  // Four chapters, each with a color used for its markers, navigation and cards.
+  const CHAPTERS = [
+    {id: 'fire', label: 'Fire', color: '#ff8a3d', blurb: 'Wildfires leave burn scars. In false color, shortwave infrared makes freshly burned ground red-brown and active fires glow orange.'},
+    {id: 'water', label: 'Water', color: '#5aa9ff', blurb: 'Floods push rivers out across their valleys. In false color, water is dark blue or black against green land.'},
+    {id: 'earth', label: 'Earth', color: '#d8b07a', blurb: 'The solid Earth moves too: an earthquake that sent a tsunami ashore, and a volcano erupting beneath an ice cap.'},
+    {id: 'ice', label: 'Ice', color: '#8fe6f5', blurb: 'Glaciers flow to the sea and break apart. In false color, ice and snow are bright cyan, easy to tell from white clouds.'}
+  ];
+  const chapterOf = e => CHAPTERS.find(c => c.id === e.chapter);
   events.forEach((e, i) => {
     Object.assign(e, EXTRA[e.id]);
     e.index = i;
@@ -452,38 +510,46 @@ void main() {
      In 7-2-1 false color, red = shortwave infrared (band 7), green = near infrared (band 2), blue = red light (band 1).
      Each pixel is sorted into a key category with rules on those three bands, checked in order (fire first,
      bare soil last). The thresholds were tuned by checking every image here: clouds are bright in all three
-     bands, ice cloud is bright with dark shortwave infrared (cyan), water is dark in both infrared bands (or,
-     when muddy, red light at least as bright as near infrared), and vegetation is near-infrared dominant.
-     The flood events have no fires, so their haze-colored pixels are read as shallow water
-     or the land underneath instead of smoke. Several categories can be selected at once. */
+     bands, ice and ice cloud are bright with dark shortwave infrared (cyan), water is dark in both infrared bands
+     (or, when muddy, red light at least as bright as near infrared), and vegetation is near-infrared dominant.
+     Some colors mean different things in different disasters, so each chapter only uses the categories that
+     can occur in it: burn scars, smoke and fire only at the fire stops (elsewhere red-brown ground is bare rock
+     or soil, and blue-teal haze is shallow water), snow-dusted forest counts as snow and anything not warm-toned
+     (SWIR above NIR and red) as cloud or water at the cold stops, and brown is volcanic ash at Eyjafjallajökull. Several categories can be selected at once. */
   const KEY = [
     {label:'Vegetation', name:'vegetation', swatch:'#3cb043'},
-    {label:'Burn scar', name:'burn scars', swatch:'#a5523a'},
+    {label:'Burn scar', name:'burn scars', swatch:'#a5523a', only: e => e.chapter === 'fire'},
     {label:'Water, flooding', name:'water', swatch:'#2a64b8'},
-    {label:'Bare soil, dry land', name:'bare soil', swatch:'#c8ad85'},
+    {label:'Bare soil, dry land', name:'bare soil', swatch:'#c8ad85', only: e => !e.ash},
     {label:'Cloud', name:'cloud', swatch:'#eef5f3'},
-    {label:'Ice cloud, snow', name:'ice cloud and snow', swatch:'#45cde3'},
-    {label:'Smoke', name:'smoke', swatch:'#8fc0c8'},
-    {label:'Active fire', name:'active fire', swatch:'#ff7a2e'}
+    {label:'Ice, snow, ice cloud', name:'ice and snow', swatch:'#45cde3'},
+    {label:'Smoke', name:'smoke', swatch:'#8fc0c8', only: e => e.chapter === 'fire'},
+    {label:'Active fire', name:'active fire', swatch:'#ff7a2e', only: e => e.chapter === 'fire'},
+    {label:'Volcanic ash', name:'volcanic ash', swatch:'#9a8775', only: e => !!e.ash}
   ];
-  const [VEG, BURN, WATER, BARE, CLOUD, ICE, SMOKE, FIRE] = d3.range(KEY.length);
-  const FLOOD_EVENTS = new Set(['pakistan', 'riogrande']);
+  const [VEG, BURN, WATER, BARE, CLOUD, ICE, SMOKE, FIRE, ASH] = d3.range(KEY.length);
+  const applies = (k, e) => !KEY[k].only || KEY[k].only(e);
+  // Which rules apply at an event: fire (burn scars, smoke, fire), cold (snow on the ground), ash (volcanic plume).
+  const optsFor = e => ({fire: e.chapter === 'fire', cold: e.chapter === 'earth' || e.chapter === 'ice', ash: !!e.ash});
   // s = shortwave infrared (red channel), n = near infrared (green), v = red light (blue).
-  function classify(s, n, v, fireEvent) {
+  function classify(s, n, v, o) {
     const L = (s + n + v) / 3, mx = Math.max(s, n, v), mn = Math.min(s, n, v);
     if (s >= 190 && s - n >= 60 && s - v >= 70) return FIRE;                         // very bright SWIR
     if (n >= 150 && v >= 150 && v - s >= 60 && Math.abs(n - v) <= 30) return ICE;      // bright cyan
     if ((L >= 150 && mn >= 105 && n >= s + 10 && Math.abs(n - v) <= 40) || (L >= 200 && mx - mn <= 60)) return CLOUD; // bright, near white
-    if (n <= 60 && s <= 60 && L < 70) return WATER;                                   // dark in both infrared bands
-    if (fireEvent && v >= n + 15 && v >= 100 && s <= 90) return SMOKE;                // blue smoke veil over water
+    if (n <= 70 && s <= 60 && L < 70 && v >= n - 25) return WATER;                    // dark in both infrared bands
+    if (o.fire && v >= n + 15 && v >= 100 && s <= 90) return SMOKE;                  // blue smoke veil over water
     if (s <= 75 && v >= n - 6 && v >= s + 40) return WATER;                           // muddy water: red light ≥ NIR
     if (s <= 140 && v >= s + 35 && n - v <= 35 && n - v >= -40 && L >= 60) {          // blue-teal haze
-      if (fireEvent) return SMOKE;
-      if (s <= 75) return WATER;                                                      // flood events: shallow water
+      if (o.fire) return SMOKE;
+      if (o.cold && n > 120) return ICE;                                              // snow-dusted forest
+      if (s <= 75 && (!o.cold || n <= 120)) return WATER;                             // shallow water
     }
     if (n >= s + 8 && n >= v + 8) return VEG;                                        // NIR dominant
-    if (s >= n + 4 && s >= v + 12 && L < 150) return BURN;                            // SWIR above NIR, red-brown
-    return BARE;                                                                      // tan / pink
+    if (o.fire && s >= n + 20 && s >= v + 12 && L < 150) return BURN;                 // SWIR well above NIR, red-brown (dry grass is only slightly above)
+    if (o.cold && !(s >= n + 3 && s >= v + 8)) return L >= 60 ? CLOUD : WATER;     // cold stops: bare ground is warm
+    if (o.ash && n < v + 4) return CLOUD;                                             // pinkish, not brown: cloud
+    return o.ash ? ASH : BARE;                                                        // warm tan / brown
   }
   const selected = new Set();    // KEY indices shown in color; empty = show everything
   const absent = new Set();      // KEY indices found in neither of the two images being compared
@@ -491,7 +557,7 @@ void main() {
   let renderToken = 0;
   const pixelCache = new Map(), maskCache = new Map();
   // Load an image with d3.image, draw it to a d3-created canvas, and classify every pixel.
-  function loadPixels(url, fireEvent) {
+  function loadPixels(url, opts) {
     if (!pixelCache.has(url)) pixelCache.set(url, d3.image(url).then(img => {
       const canvas = d3.create('canvas').attr('width', img.naturalWidth).attr('height', img.naturalHeight).node();
       const ctx = canvas.getContext('2d', {willReadFrequently: true});
@@ -499,16 +565,16 @@ void main() {
       const {data} = ctx.getImageData(0, 0, canvas.width, canvas.height); // throws if the canvas is tainted
       const cls = new Uint8Array(canvas.width * canvas.height);
       const counts = new Uint32Array(KEY.length);
-      for (let i = 0, p = 0; i < cls.length; i++, p += 4) counts[cls[i] = classify(data[p], data[p+1], data[p+2], fireEvent)]++;
+      for (let i = 0, p = 0; i < cls.length; i++, p += 4) counts[cls[i] = classify(data[p], data[p+1], data[p+2], opts)]++;
       const share = Array.from(counts, c => c / cls.length);   // fraction of the image in each category
       return {width: canvas.width, height: canvas.height, data, cls, share};
     }));
     return pixelCache.get(url);
   }
   // Returns an object URL for a version of the image where only the selected categories keep their color.
-  function isolatedImage(url, fireEvent, picks) {
+  function isolatedImage(url, opts, picks) {
     const cacheKey = `${url}|${picks.join(',')}`;
-    if (!maskCache.has(cacheKey)) maskCache.set(cacheKey, loadPixels(url, fireEvent).then(({width, height, data, cls}) => {
+    if (!maskCache.has(cacheKey)) maskCache.set(cacheKey, loadPixels(url, opts).then(({width, height, data, cls}) => {
       const keep = new Uint8Array(KEY.length); picks.forEach(k => { keep[k] = 1; });
       const canvas = d3.create('canvas').attr('width', width).attr('height', height).node();
       const ctx = canvas.getContext('2d');
@@ -531,9 +597,9 @@ void main() {
       leftImage.attr('href', leftUrl); setRight(rightUrl);
       viewerSvg.interrupt('isolate').style('opacity', 1); return;
     }
-    const fireEvent = !FLOOD_EVENTS.has(current.id), picks = picksList();
+    const opts = optsFor(current), picks = picksList();
     viewerSvg.transition('isolate').duration(150).style('opacity', 0.7);
-    Promise.all([isolatedImage(leftUrl, fireEvent, picks), isolatedImage(rightUrl, fireEvent, picks)])
+    Promise.all([isolatedImage(leftUrl, opts, picks), isolatedImage(rightUrl, opts, picks)])
       .then(([l, r]) => { if (token === renderToken) { leftImage.attr('href', l); setRight(r); } })
       .catch(err => {
         console.warn('Color isolation unavailable:', err);
@@ -553,9 +619,10 @@ void main() {
   const selectedLabels = () => listFormat.format(picksList().map(i => KEY[i].name));
   function updateKey() {
     const any = selected.size > 0;
-    const flood = FLOOD_EVENTS.has(current.id);
+    // Only categories that appear in at least one of the two images are listed.
+    d3.select('#key-list').selectAll('li').style('display', (d, i) => applies(i, current) && !absent.has(i) ? null : 'none');
     keyButtons.attr('aria-pressed', (d, i) => String(selected.has(i)))
-      .attr('title', (d, i) => absent.has(i) ? (flood && (i === SMOKE || i === FIRE) ? `No ${d.name} in this flood event` : `No ${d.name} found on either date`)
+      .attr('title', (d, i) => absent.has(i) ? `No ${d.name} found on either date`
         : selected.has(i) ? `Remove ${d.name} from the selection` : any ? `Also show ${d.name}` : `Show only ${d.name}`)
       .property('disabled', (d, i) => !isolationAvailable || absent.has(i))
       .classed('absent', (d, i) => absent.has(i))
@@ -585,23 +652,24 @@ void main() {
     updateKey(); refresh();
   }
   function updateCoverage(left, right) {
-    const token = ++coverageToken, e = current, fireEvent = !FLOOD_EVENTS.has(e.id);
+    const token = ++coverageToken, e = current, opts = optsFor(e);
     const box = d3.selectAll('.card .coverage').filter(d => d.event === e);
-    Promise.all([loadPixels(fileFor(e, left[0], 'false'), fireEvent), loadPixels(fileFor(e, right[0], 'false'), fireEvent)])
+    Promise.all([loadPixels(fileFor(e, left[0], 'false'), opts), loadPixels(fileFor(e, right[0], 'false'), opts)])
       .then(([a, b]) => {
         if (token !== coverageToken) return;
         const rows = KEY.map((d, k) => ({k, d, a: a.share[k], b: b.share[k]}));
         absent.clear();
-        rows.forEach(r => { if (r.a < MIN_SHARE && r.b < MIN_SHARE) absent.add(r.k); });
+        // Categories that can't occur at this kind of event are hidden; the rest are "absent" when too rare.
+        rows.forEach(r => { if (!applies(r.k, e) || (r.a < MIN_SHARE && r.b < MIN_SHARE)) absent.add(r.k); });
         const dropped = [...selected].filter(k => absent.has(k));
         dropped.forEach(k => selected.delete(k));
-        renderCoverage(box, rows.filter(r => !absent.has(r.k)), rows.filter(r => absent.has(r.k)), left, right, fireEvent);
+        renderCoverage(box, rows.filter(r => !absent.has(r.k)), rows.filter(r => absent.has(r.k) && applies(r.k, e)), left, right);
         updateKey();
         if (dropped.length) refresh();
       })
       .catch(() => { if (token === coverageToken) box.html('').append('p').attr('class', 'cov-note').text('The coverage chart needs the page served from a web server, like the color isolation.'); });
   }
-  function renderCoverage(box, rows, missing, left, right, fireEvent) {
+  function renderCoverage(box, rows, missing, left, right) {
     box.html('');
     box.append('h3').text('What changed between the two dates');
     box.append('p').attr('class', 'cov-legend').text(`Change in each category’s share of the image, in percentage points, from ${left[1]} to ${right[1]}. Right: the share on each date.`);
@@ -654,7 +722,7 @@ void main() {
       .on('keydown', (event, r) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); toggleCategory(r.k); } });
 
     const notes = [];
-    if (missing.length) notes.push(`Not found on either date: ${listFormat.format(missing.map(r => r.d.name))}${!fireEvent && missing.some(r => r.k === SMOKE || r.k === FIRE) ? ' (no fires in a flood event)' : ''}.`);
+    if (missing.length) notes.push(`Not found on either date: ${listFormat.format(missing.map(r => r.d.name))}.`);
     notes.push('Share of pixels in each category of the false-color images, so clouds hide the ground under them.');
     box.append('p').attr('class', 'cov-note').text(notes.join(' '));
     const any = selected.size > 0;
@@ -721,7 +789,8 @@ void main() {
   events.forEach((e, i) => { stepData.push({kind: 'event', event: e}); stepData.push({kind: 'travel', from: e, to: events[i + 1] || null}); });
   const generated = d3.select('#steps').selectAll('section').data(stepData).join('section').attr('class', d => `step step-${d.kind}`);
   const eventCards = generated.filter(d => d.kind === 'event').append('div').attr('class', 'card glass');
-  eventCards.append('p').attr('class', 'kicker').text(d => `Stop ${d.event.index + 1} of ${events.length}`);
+  eventCards.append('p').attr('class', 'kicker').style('color', d => chapterOf(d.event).color)
+    .text(d => `${chapterOf(d.event).label} · Stop ${d.event.index + 1} of ${events.length}`);
   eventCards.append('h2').text(d => d.event.title);
   eventCards.append('p').text(d => d.event.summary);
   eventCards.append('p').attr('class', 'try').html(d => `<strong>Try it:</strong> ${d.event.hint}`);
@@ -729,8 +798,12 @@ void main() {
   eventCards.append('p').append('a').attr('href', d => d.event.source).attr('target', '_blank').attr('rel', 'noopener noreferrer').text('NASA event context ↗');
   const km = d => d3.format(',')(Math.round(d3.geoDistance(d.from.center, d.to.center) * 6371 / 100) * 100);
   const travelCards = generated.filter(d => d.kind === 'travel').append('div').attr('class', 'card glass');
-  travelCards.append('p').attr('class', 'kicker').text(d => d.from && d.to ? 'Next stop' : d.to ? 'First stop' : 'Back to orbit');
-  travelCards.append('h2').text(d => d.to ? d.to.title : 'Five events, five continents');
+  // A travel card that enters a new chapter introduces it.
+  const newChapter = d => d.to && (!d.from || d.from.chapter !== d.to.chapter);
+  travelCards.append('p').attr('class', 'kicker').style('color', d => d.to ? chapterOf(d.to).color : null)
+    .text(d => !d.to ? 'Back to orbit' : newChapter(d) ? `Chapter ${CHAPTERS.indexOf(chapterOf(d.to)) + 1} of ${CHAPTERS.length} · ${chapterOf(d.to).label}` : `Next stop · ${chapterOf(d.to).label}`);
+  travelCards.append('h2').text(d => d.to ? d.to.title : 'Four chapters, seven events');
+  travelCards.filter(newChapter).append('p').attr('class', 'chapter-blurb').text(d => chapterOf(d.to).blurb);
   travelCards.append('p').text(d => d.from && d.to ? `About ${km(d)} km from the ${d.from.short}. Keep scrolling to zoom in.`
     : d.to ? 'Keep scrolling to zoom in.' : 'Every image here is from the same NASA instrument, MODIS on the Terra satellite. Scroll on for notes on reading the imagery and the project writeup.');
   d3.select('#top').datum({kind: 'hero'});
@@ -738,9 +811,17 @@ void main() {
   const steps = d3.selectAll('#story .step');
 
   // Navigation: Intro, one button per event, About.
+  // Each chapter's name comes before its stops (and jumps to its first stop); dots take the chapter's color.
   const stops = [{label: 'Intro', kind: 'hero'}, ...events.map(e => ({label: e.nav, kind: 'event', event: e})), {label: 'About', kind: 'outro'}];
-  const stopButtons = d3.select('#stops').selectAll('li').data(stops).join('li').append('button').attr('type', 'button')
-    .attr('title', d => d.label).attr('aria-label', d => d.label);
+  const navItems = stops.flatMap(d => d.kind === 'event' && (d.event.index === 0 || events[d.event.index - 1].chapter !== d.event.chapter)
+    ? [{kind: 'chapter', chapter: chapterOf(d.event), first: d}, d] : [d]);
+  const navLis = d3.select('#stops').selectAll('li').data(navItems).join('li').attr('class', d => d.kind === 'chapter' ? 'chapter' : d.kind === 'event' ? 'event-stop' : null);
+  navLis.filter(d => d.kind === 'chapter').append('button').attr('type', 'button').attr('class', 'chapter-btn')
+    .style('--c', d => d.chapter.color).attr('title', d => `${d.chapter.label} chapter`).text(d => d.chapter.label)
+    .on('click', (event, d) => scrollToStop(d.first));
+  const stopButtons = navLis.filter(d => d.kind !== 'chapter').append('button').attr('type', 'button').attr('class', 'stop')
+    .style('--c', d => d.kind === 'event' ? chapterOf(d.event).color : null)
+    .attr('title', d => d.kind === 'event' ? `${d.label} (${chapterOf(d.event).label})` : d.label).attr('aria-label', d => d.label);
   stopButtons.append('span').attr('class', 'label').text(d => d.label);
   function scrollToStop(d) {
     const node = steps.filter(s => s.kind === d.kind && (d.kind !== 'event' || s.event === d.event)).node();
@@ -912,11 +993,11 @@ void main() {
   const layerSets = new Map();
   // Bump when make_globe_textures.py is re-run: the version in the URL makes browsers fetch the new textures
   // instead of reusing cached copies with the same file names.
-  const TEXTURE_VERSION = '2026-11-19';
+  const TEXTURE_VERSION = '2026-11-19b';
   function layersFor(e, b) {
     const key = `${e.id}-${b}`;
     if (!layerSets.has(key)) {
-      const date = e.dates[e.right][0], base = `assets/globe/${e.id}-${date}-${b}`;
+      const date = e.dates[e.right][0], base = `assets/globe/${e.id}-${e.globeDate || date}-${b}`;
       layerSets.set(key, {
         world: texture(`${base}-world.jpg?v=${TEXTURE_VERSION}`, true),
         levels: [
@@ -971,10 +1052,11 @@ void main() {
   const fallbackGlobe = d3.select('#globe-overlay .fallback-globe');
   if (!gl) d3.json('assets/countries-110m.json').then(w => { fallbackLand = topojson.feature(w, w.objects.land); lastKey = ''; }).catch(() => {});
 
-  /* ---- Markers and labels for the three events (D3, same projection as the globe) ---- */
+  /* ---- Markers and labels for the events (D3, same projection as the globe) ---- */
   const overlay = d3.select('#globe-overlay');
   const markers = overlay.select('.markers').selectAll('g').data(events).join('g').attr('class', 'marker')
     .on('click', (event, e) => scrollToStop({kind: 'event', event: e}));
+  markers.style('--c', e => chapterOf(e).color);
   markers.append('circle').attr('class', 'pulse').attr('r', 5);
   markers.append('circle').attr('class', 'dot').attr('r', 5);
   markers.append('text').attr('x', 11).attr('y', 5).text(d => d.short);
@@ -1011,7 +1093,9 @@ void main() {
       lastComp = v.comp;
       frameEl.style('opacity', v.comp); dockEl.style('opacity', v.comp);
     }
-    if (v.stop !== lastStop) { lastStop = v.stop; stopButtons.attr('aria-current', (d, i) => i === v.stop ? 'step' : null); }
+    if (v.stop !== lastStop) { lastStop = v.stop; stopButtons.attr('aria-current', d => stops.indexOf(d) === v.stop ? 'step' : null)
+      // The current chapter's stops show their names; the other chapters stay as dots.
+      .classed('chapter-open', d => d.kind === 'event' && stops[v.stop].kind === 'event' && stops[v.stop].event.chapter === d.event.chapter); }
     // Preload imagery for this stop and its neighbours.
     const b = band();
     [v.A, v.B, events[current.index + 1], events[current.index - 1]].filter(Boolean).forEach(e => layersFor(e, b));

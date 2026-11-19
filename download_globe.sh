@@ -67,5 +67,20 @@ get kangaroo-2020-01-07 L1 '-38.53,133.29,-33.17,141.32' 960 640 2020-01-07
 get kangaroo-2020-01-07 L2 '-46.57,121.23,-25.13,153.38' 1440 960 2020-01-07
 for d in 2020-01-04 2020-01-05 2020-01-06 2020-01-07 2020-01-08 2020-01-09; do get kangaroo-$d L3 '-68.01,89.065,-3.69,180' 1357 960 $d; done
 for d in 2020-01-04 2020-01-05 2020-01-06 2020-01-07 2020-01-08 2020-01-09; do get kangaroo-$d world '-90,-180,90,180' 2048 1024 $d; done
-echo "Done: $(ls assets/globe/raw/*.jpg 2>/dev/null | wc -l | tr -d ' ') of 141 images in assets/globe/raw ($FAILURES failed)"
+# Tōhoku tsunami (2011), Eyjafjallajökull eruption (2010) and Petermann Glacier calving (2010). Same layout as above;
+# where a context image runs into the map edge or the pole it is cut off there, and it is never coarser than the
+# whole-world mosaic.
+get tohoku-2011-03-12 L1 '35.75,136.39,40.55,145.51' 960 640 2011-03-12
+get tohoku-2011-03-12 L2 '28.55,122.71,47.75,159.19' 1440 960 2011-03-12
+for d in 2011-03-09 2011-03-10 2011-03-11 2011-03-12 2011-03-13 2011-03-14; do get tohoku-$d L3 '9.35,86.23,66.95,180' 1234 960 $d; done
+for d in 2011-03-09 2011-03-10 2011-03-11 2011-03-12 2011-03-13 2011-03-14; do get tohoku-$d world '-90,-180,90,180' 2048 1024 $d; done
+get iceland-2010-04-15 L1 '51,-55.7,75,23.5' 960 640 2010-04-15
+get iceland-2010-04-15 L2 '15,-174.5,90,142.3' 1802 750 2010-04-15
+for d in 2010-04-12 2010-04-13 2010-04-14 2010-04-15 2010-04-16 2010-04-17; do get iceland-$d L3 '-81,-180,90,180' 2048 973 $d; done
+for d in 2010-04-12 2010-04-13 2010-04-14 2010-04-15 2010-04-16 2010-04-17; do get iceland-$d world '-90,-180,90,180' 2048 1024 $d; done
+get petermann-2010-08-05 L1 '78.5,-83.8,83.3,-38.2' 960 640 2010-08-05
+get petermann-2010-08-05 L2 '71.3,-152.2,90,30.2' 1440 935 2010-08-05
+for d in 2010-08-02 2010-08-03 2010-08-04 2010-08-05 2010-08-06 2010-08-07; do get petermann-$d L3 '52.1,-180,90,180' 2048 632 $d; done
+for d in 2010-08-02 2010-08-03 2010-08-04 2010-08-05 2010-08-06 2010-08-07; do get petermann-$d world '-90,-180,90,180' 2048 1024 $d; done
+echo "Done: $(ls assets/globe/raw/*.jpg 2>/dev/null | wc -l | tr -d ' ') of 225 images in assets/globe/raw ($FAILURES failed)"
 echo "Next: python3 make_globe_textures.py  (builds the gap-free textures the page uses)"
