@@ -5,124 +5,304 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>How do wildfires and floods change the landscape? | MODIS comparison</title>
   <style>
-:root { color-scheme: light; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #202b32; background: #d9dfca; }
+:root {
+  color-scheme: dark;
+  --glass: rgba(9, 16, 23, 0.74); --glass-strong: rgba(9, 16, 23, 0.88); --line: rgba(170, 200, 220, 0.18);
+  --text: #e7eef2; --muted: #a3b3bb; --accent: #ffb454; --link: #8fcaff;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif; color: var(--text); background: #03060a;
+}
 * { box-sizing: border-box; }
-body { margin: 0; }
-.page { max-width: 1240px; margin: 0 auto; padding: 28px 28px 56px; }
-.heading { display: flex; justify-content: space-between; align-items: end; gap: 36px; border-bottom: 1px solid #bbc3c7; padding-bottom: 18px; margin-bottom: 20px; }
-h1, h2, p { margin: 0; }
-h1 { font-size: 27px; line-height: 1.2; font-weight: 650; letter-spacing: -.02em; }
-.subtitle { margin-top: 6px; max-width: 640px; color: #58666d; font-size: 13px; line-height: 1.45; }
-.intro { max-width: 440px; color: #4b5b63; font-size: 14px; line-height: 1.5; }
-.explorer { background: #fff; border: 1px solid #d1d7d9; padding: 22px; }
-.toolbar { display: flex; justify-content: space-between; align-items: end; gap: 24px; border-bottom: 1px solid #e1e5e6; padding-bottom: 20px; }
-.field label, .field legend, .slider-heading label { display: block; margin: 0 0 6px; color: #394951; font-size: 13px; font-weight: 600; }
-.event { width: min(100%, 350px); }
-select { width: 100%; padding: 9px 32px 9px 10px; color: #202b32; background: #fff; border: 1px solid #a9b5ba; border-radius: 2px; font: inherit; font-size: 14px; cursor: pointer; }
-fieldset { border: 0; margin: 0; padding: 0; }
-.segmented { display: flex; border: 1px solid #a9b5ba; border-radius: 2px; overflow: hidden; }
-.segmented label { margin: 0; cursor: pointer; font-size: 13px; font-weight: 500; }
+html { scroll-behavior: auto; }
+body { margin: 0; background: #03060a; }
+h1, h2, h3, p { margin: 0; }
+a { color: var(--link); text-underline-offset: 2px; }
+button, select, input { font: inherit; }
+button:focus-visible, select:focus-visible, input:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.glass { background: var(--glass); border: 1px solid var(--line); border-radius: 12px; backdrop-filter: blur(14px) saturate(1.2); -webkit-backdrop-filter: blur(14px) saturate(1.2); }
+
+/* ---- Fixed layers: WebGL globe, globe labels, then the interactive stage ---- */
+#globe { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; z-index: 0; }
+#globe-overlay { position: fixed; inset: 0; width: 100vw; height: 100vh; z-index: 1; pointer-events: none; overflow: visible; }
+.no-webgl #globe { display: none; }
+.no-webgl body, .no-webgl { background: radial-gradient(circle at 70% 30%, #0d1830, #03060a 60%); }
+.marker { cursor: pointer; pointer-events: auto; }
+.marker circle.dot { fill: var(--accent); stroke: #10202a; stroke-width: 1.5; }
+.marker circle.pulse { fill: none; stroke: var(--accent); stroke-width: 1.5; transform-box: fill-box; transform-origin: center; animation: pulse 2.4s ease-out infinite; }
+.marker text { fill: #fff; font-size: 14px; font-weight: 600; paint-order: stroke; stroke: rgba(3, 6, 10, 0.85); stroke-width: 4px; }
+@keyframes pulse { from { transform: scale(1); opacity: .9; } to { transform: scale(3.2); opacity: 0; } }
+.fallback-sphere { fill: #0b2233; stroke: #6f9fb3; }
+.fallback-land { fill: #4b6150; }
+
+.stage { position: fixed; inset: 0; z-index: 2; pointer-events: none; }
+.topbar { position: absolute; top: 12px; left: 16px; right: 16px; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 7px 10px 7px 16px; pointer-events: auto; }
+.brand { color: var(--text); font-size: 13px; font-weight: 650; letter-spacing: .02em; text-decoration: none; white-space: nowrap; }
+.stops { display: flex; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.stops button { display: flex; align-items: center; gap: 7px; padding: 6px 10px; color: var(--muted); background: none; border: 1px solid transparent; border-radius: 999px; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.stops button::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; opacity: .6; }
+.stops button:hover { color: var(--text); }
+.stops button[aria-current="step"] { color: #10202a; background: var(--accent); }
+.stops button[aria-current="step"]::before { opacity: 1; }
+@media (max-width: 1280px) { .stops button:not([aria-current]) .label { display: none; } .stops button { padding: 6px 8px; } }
+.segmented { display: flex; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; }
+fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
+.segmented label { cursor: pointer; font-size: 12px; font-weight: 600; }
 .segmented input { position: absolute; opacity: 0; }
-.segmented span { display: block; padding: 9px 12px; background: #fff; }
-.segmented label + label span { border-left: 1px solid #a9b5ba; }
-.segmented input:checked + span { color: #fff; background: #31596c; }
-.segmented input:focus-visible + span { outline: 3px solid #b06a21; outline-offset: -3px; }
-.comparison-head { display: flex; justify-content: space-between; align-items: baseline; gap: 24px; margin: 20px 0 16px; }
-h2 { font-size: 19px; font-weight: 650; }
-.comparison-head > p { max-width: 460px; font-size: 13px; line-height: 1.45; color: #58666d; }
-.date-controls { display: grid; grid-template-columns: 1fr auto 1fr; gap: 12px; align-items: start; margin-bottom: 14px; }
-.date-note { margin-top: 6px; color: #58666d; font-size: 12px; line-height: 1.4; }
-.swap { margin-top: 21px; width: 39px; height: 37px; color: #294e60; background: #fff; border: 1px solid #a9b5ba; border-radius: 2px; font-size: 19px; cursor: pointer; }
-.viewer-wrap { position: relative; overflow: hidden; background: #17242a; }
-.viewer { min-height: 180px; }
-.viewer svg { display: block; width: 100%; max-height: 72vh; height: auto; touch-action: pan-y; }
-.viewer .fallback { display: block; width: 100%; height: auto; }
+.segmented label > span { display: block; padding: 6px 12px; color: var(--muted); white-space: nowrap; }
+.segmented input:checked + span, .segmented input:checked + span .long { color: #10202a; background: #dfe9ee; }
+.segmented input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+/* The comparison frame is placed by JS exactly over the event's footprint on the globe. */
+.frame { position: absolute; overflow: hidden; border-radius: 3px; box-shadow: 0 0 0 1px rgba(255, 255, 255, .28), 0 24px 70px rgba(0, 0, 0, .55); opacity: 0; pointer-events: none; }
+.frame.live { pointer-events: auto; }
+.viewer, .viewer svg { display: block; width: 100%; height: 100%; }
+.viewer svg { touch-action: pan-y; }
+.viewer .fallback { display: block; width: 100%; height: 100%; object-fit: cover; }
 .handle { pointer-events: none; }
 .handle line { stroke: #fff; stroke-width: 3; }
-.handle circle { fill: #243e4a; stroke: #fff; stroke-width: 3; }
+.handle circle { fill: rgba(9, 16, 23, .85); stroke: #fff; stroke-width: 3; }
 .handle text { fill: #fff; font-size: 26px; }
-.image-label { position: absolute; top: 12px; padding: 7px 9px; color: #fff; background: #182a33e8; font-size: 12px; font-weight: 600; pointer-events: none; }
-.image-label.left { left: 12px; } .image-label.right { right: 12px; }
-.zoom-controls { position: absolute; right: 12px; bottom: 12px; display: flex; gap: 3px; }
-.zoom-controls button { min-width: 36px; height: 36px; border: 1px solid #e1e7ea; background: #1c3541ed; color: #fff; font-family: inherit; font-size: 17px; font-weight: 600; cursor: pointer; }
-.zoom-controls button:last-child { padding: 0 10px; font-size: 12px; font-weight: 600; }
-.zoom-hint { margin-top: 8px; color: #58666d; font-size: 12px; }
-.slider-heading, .slider-ends { display: flex; justify-content: space-between; gap: 12px; }
-.slider-heading { margin-top: 18px; align-items: baseline; }
-.slider-heading span, .slider-ends { color: #58666d; font-size: 12px; }
-input[type=range] { display: block; width: 100%; margin: 7px 0 4px; accent-color: #31596c; cursor: ew-resize; }
-.details { display: grid; grid-template-columns: repeat(3,1fr); gap: 24px; border-top: 1px solid #d7dedf; margin-top: 23px; padding-top: 18px; }
-.details p { color: #506068; font-size: 12px; line-height: 1.55; }
-footer { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 12px; border-top: 1px solid #d7dedf; margin-top: 20px; padding-top: 16px; color: #58666d; font-size: 12px; }
-a { color: #225875; text-underline-offset: 2px; }
-button:focus-visible, select:focus-visible, input:focus-visible { outline: 3px solid #b06a21; outline-offset: 2px; }
-.color-key { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin-top: 12px; padding: 10px 12px; background: #f4f6f2; border: 1px solid #dfe4df; }
+.image-label { position: absolute; top: 10px; max-width: 44%; padding: 6px 9px; color: #fff; background: rgba(9, 16, 23, .8); border-radius: 6px; font-size: 12px; font-weight: 650; pointer-events: none; }
+.image-label small { display: block; margin-top: 2px; color: #c4d2d8; font-size: 11px; font-weight: 400; line-height: 1.35; }
+.image-label.left { left: 10px; } .image-label.right { right: 10px; }
+.zoom-controls { position: absolute; right: 10px; bottom: 10px; display: flex; gap: 3px; }
+.zoom-controls button { min-width: 34px; height: 34px; color: #fff; background: rgba(9, 16, 23, .82); border: 1px solid rgba(255, 255, 255, .25); border-radius: 6px; font-size: 17px; font-weight: 600; cursor: pointer; }
+.zoom-controls button:last-child { padding: 0 10px; font-size: 12px; }
+
+.dock { position: absolute; display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; opacity: 0; pointer-events: none; }
+.dock.live { pointer-events: auto; }
+.dates-row { display: grid; grid-template-columns: 1fr auto 1fr; gap: 8px; align-items: center; }
+.date-field { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.date-field label { color: var(--muted); font-size: 12px; font-weight: 600; }
+select { width: 100%; min-width: 0; padding: 6px 28px 6px 10px; color: var(--text); background: rgba(255, 255, 255, .06); border: 1px solid var(--line); border-radius: 8px; font-size: 13px; cursor: pointer; }
+select option { color: var(--text); background: #0b141b; }
+.swap { width: 34px; height: 31px; color: var(--text); background: rgba(255, 255, 255, .06); border: 1px solid var(--line); border-radius: 8px; font-size: 16px; cursor: pointer; }
+.divider-row { display: flex; align-items: center; gap: 12px; color: var(--muted); font-size: 12px; }
+.divider-row label { color: var(--muted); font-weight: 600; }
+.divider-row input[type=range] { flex: 1 1 auto; margin: 0; accent-color: var(--accent); cursor: ew-resize; }
+.color-key { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
 .color-key[hidden] { display: none; }
-.key-title { color: #394951; font-size: 12px; font-weight: 600; }
-.color-key ul { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 0; padding: 0; list-style: none; }
-.color-key li { display: flex; align-items: center; gap: 6px; color: #4b5b63; font-size: 12px; }
-.color-key i { width: 14px; height: 14px; border: 1px solid #8e9aa0; border-radius: 2px; }
-@media (max-width: 700px) {
- .page { padding: 20px 12px 36px; } .heading { display: block; padding-bottom: 14px; margin-bottom: 14px; } h1 { font-size: 23px; } .intro { margin-top: 10px; font-size: 13px; }
- .explorer { padding: 14px; } .toolbar { display: block; padding-bottom: 16px; } .event { width: 100%; margin-bottom: 14px; } .segmented { width: fit-content; }
- .comparison-head { display: block; margin: 16px 0 12px; } .comparison-head > p { margin-top: 6px; } .date-controls { grid-template-columns: 1fr 36px 1fr; gap: 7px; } .swap { width: 36px; } .date-note { font-size: 11px; }
- .viewer svg { max-height: none; } .image-label { top: 7px; font-size: 10px; padding: 5px; max-width: 44%; } .image-label.left { left: 7px; } .image-label.right { right: 7px; } .zoom-controls { right: 7px; bottom: 7px; } .zoom-controls button { height: 32px; min-width: 32px; }
- .details { grid-template-columns: 1fr; gap: 10px; }
-}
-  .writeup { margin-top: 28px; padding: 22px; background: #fff; border: 1px solid #d1d7d9; }
-.writeup h2 { margin: 0 0 8px; }
-.writeup h3 { font-size: 15px; margin: 22px 0 8px; }
+.key-title { color: var(--muted); font-size: 12px; font-weight: 600; }
+.color-key ul { display: contents; margin: 0; padding: 0; list-style: none; }
+.color-key li { list-style: none; }
+.color-key i { flex: none; width: 12px; height: 12px; border: 1px solid rgba(255, 255, 255, .35); border-radius: 3px; }
+.key-item { display: flex; align-items: center; gap: 6px; padding: 3px 8px; color: #cfdbe0; background: none; border: 1px solid transparent; border-radius: 999px; font-size: 12px; white-space: nowrap; cursor: pointer; }
+.key-item:hover { border-color: var(--line); background: rgba(255, 255, 255, .05); }
+.key-item[aria-pressed="true"] { color: #10202a; background: #dfe9ee; font-weight: 650; }
+.key-item.dimmed i { filter: grayscale(1); }
+.key-item:disabled { cursor: not-allowed; }
+.key-clear { padding: 3px 10px; color: #10202a; background: var(--accent); border: 0; border-radius: 999px; font-size: 12px; font-weight: 650; cursor: pointer; }
+.key-clear[hidden] { display: none; }
+.key-status { flex-basis: 100%; color: var(--muted); font-size: 12px; line-height: 1.45; }
+.key-status:not(.warn) { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; } /* read by screen readers */
+.key-status:empty { display: none; }
+.key-status.warn { color: #ffc98a; }
+
+/* ---- Scrolling story, layered over everything ---- */
+.story { position: relative; z-index: 3; pointer-events: none; }
+.story .card, .story a, .story button { pointer-events: auto; }
+.step { width: min(400px, 30vw); margin-left: 16px; }
+.step-hero { min-height: 100vh; display: flex; align-items: center; padding-top: 70px; }
+.step-travel { min-height: 420vh; padding-top: 190vh; }
+.step-event { min-height: 150vh; padding-top: 18vh; }
+.step-outro { width: min(720px, calc(100vw - 32px)); padding: 40vh 0 12vh; }
+.card { padding: 20px 22px; }
+.card .kicker { color: var(--accent); font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
+.card h2 { margin: 8px 0 10px; font-size: 21px; font-weight: 650; line-height: 1.25; }
+.card p { color: #c9d6dc; font-size: 14.5px; line-height: 1.55; }
+.card p + p { margin-top: 10px; }
+.card .try { padding: 10px 12px; color: #dfe9ee; background: rgba(255, 255, 255, .05); border-left: 3px solid var(--accent); border-radius: 0 8px 8px 0; font-size: 13.5px; }
+.hero-card { padding: 30px 30px 26px; background: var(--glass-strong); }
+.hero-card h1 { margin: 10px 0 12px; font-size: clamp(28px, 3.2vw, 42px); line-height: 1.1; font-weight: 700; letter-spacing: -.02em; }
+.hero-card .subtitle { color: var(--muted); font-size: 13px; }
+.hero-card .intro { margin-top: 14px; }
+.scroll-cue { display: inline-flex; align-items: center; gap: 8px; margin-top: 20px; color: var(--text); font-size: 13px; font-weight: 600; }
+.scroll-cue span { display: inline-block; animation: bob 1.6s ease-in-out infinite; }
+@keyframes bob { 50% { transform: translateY(4px); } }
+.outro .card { background: var(--glass-strong); }
+.outro .card + .card { margin-top: 16px; }
+.details { display: grid; gap: 10px; margin-top: 4px; }
+.details p { font-size: 13px; }
+footer { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); color: var(--muted); font-size: 12px; }
+.writeup h2 { margin: 0 0 6px; font-size: 21px; }
+.writeup h3 { margin: 20px 0 8px; font-size: 15px; }
 .writeup p + p { margin-top: 12px; }
-.writeup p, .writeup li { color: #506068; font-size: 14px; line-height: 1.6; }
-.writeup ul { margin: 0; padding-left: 21px; }
+.writeup ul { margin: 0; padding-left: 20px; color: #c9d6dc; font-size: 14px; line-height: 1.55; }
 .writeup li + li { margin-top: 8px; }
+
+/* ---- Small screens: frame and controls at the top, story cards rise from the bottom ---- */
+@media (max-width: 899px) {
+  .topbar { top: 8px; left: 8px; right: 8px; padding: 6px 8px; gap: 8px; }
+  .brand, .stops .label { display: none; }
+  .stops button { padding: 6px 7px; }
+  .segmented label > span { padding: 6px 9px; }
+  .segmented .long { display: none; }
+  .step { width: auto; margin: 0 10px; }
+  .step-hero { align-items: flex-end; padding: 0 0 6vh; }
+  .step-event { padding-top: 78vh; }
+  .step-travel { padding-top: 210vh; }
+  .step-outro { width: auto; margin: 0 10px; }
+  .card { padding: 16px; }
+  .dock { padding: 8px; gap: 6px; }
+  .date-field label, .divider-row span { display: none; }
+  .color-key { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 2px; }
+  .key-title { display: none; }
+  .image-label small { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .marker circle.pulse, .scroll-cue span { animation: none; }
+}
 </style>
   <script src="assets/d3.v7.min.js"></script>
+  <script src="assets/topojson-client.min.js"></script>
+  <script id="globe-shader" type="x-shader/x-fragment">#version 300 es
+precision highp float;
+out vec4 outColor;
+uniform vec2 uRes;            // canvas size, device px
+uniform float uDpr;
+uniform vec2 uAnchor;         // globe center on screen, CSS px
+uniform float uScale;         // globe radius, CSS px
+uniform float uStretch;       // horizontal stretch so a zoomed-in view matches the flat event image
+uniform float uFlat;          // 1 = zoomed into an event (no lighting, no atmosphere), 0 = whole globe
+uniform float uMix;           // world mosaic crossfade between the two events' dates
+uniform float uDim;           // darken outside the comparison frame
+uniform vec4 uFocus;          // comparison frame rect, CSS px
+uniform vec2 uStarShift;
+uniform vec3 uC, uE, uN;      // view center, east and north unit vectors
+uniform sampler2D uWorldA, uWorldB, uA0, uA1, uA2, uA3, uB0, uB1, uB2, uB3;
+uniform vec4 uExtA[4], uExtB[4];  // west, north, width, height (degrees)
+uniform vec2 uParA[4], uParB[4];  // feather (0 = layer off), mip level
+uniform vec2 uLodWorld;
+const float RAD = 0.017453292519943295;
 
+float hash(vec2 p) { p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
+
+vec3 stars(vec2 p) {
+  vec3 col = vec3(0.0);
+  for (int i = 0; i < 2; i++) {
+    float cell = i == 0 ? 6.0 : 17.0;
+    vec2 q = (p + uStarShift * (i == 0 ? 0.25 : 0.6)) / cell;
+    vec2 id = floor(q), f = fract(q);
+    float h = hash(id + float(i) * 31.7);
+    if (h > (i == 0 ? 0.968 : 0.935)) {
+      vec2 at = vec2(hash(id + 3.1), hash(id + 7.7)) * 0.7 + 0.15;
+      float d = length((f - at) * cell), size = i == 0 ? 0.55 : 1.0;
+      float b = exp(-d * d / (size * size)) * (0.3 + 0.7 * hash(id + 11.3)) * (i == 0 ? 0.65 : 1.0);
+      col += b * mix(vec3(0.72, 0.82, 1.0), vec3(1.0, 0.9, 0.8), hash(id + 5.9));
+    }
+  }
+  return col;
+}
+
+vec3 space(vec2 p) {
+  vec2 uv = p * uDpr / uRes;
+  vec3 col = vec3(0.006, 0.011, 0.022);
+  col += vec3(0.05, 0.08, 0.17) * smoothstep(0.95, 0.0, length((uv - vec2(0.78, 0.25)) * vec2(1.4, 1.0))) * 0.55;
+  col += vec3(0.10, 0.05, 0.12) * smoothstep(0.75, 0.0, length((uv - vec2(0.12, 0.9)) * vec2(1.2, 1.0))) * 0.35;
+  return col + stars(p);
+}
+
+vec4 layer(sampler2D t, vec4 ext, vec2 par, float lon, float lat, float boost) {
+  if (par.x <= 0.0) return vec4(0.0);
+  float u = (lon - ext.x) / ext.z, v = (ext.y - lat) / ext.w;
+  if (u < 0.0 || u > 1.0 || v < 0.0 || v > 1.0) return vec4(0.0);
+  float e = min(min(u, 1.0 - u), min(v, 1.0 - v)) / par.x;
+  float w = e >= 1.0 ? 1.0 : e * e * (3.0 - 2.0 * e);
+  return vec4(textureLod(t, vec2(u, v), par.y + boost).rgb, w);
+}
+
+void main() {
+  vec2 p = vec2(gl_FragCoord.x, uRes.y - gl_FragCoord.y) / uDpr;
+  float X = (p.x - uAnchor.x) / (uStretch * uScale), Y = (uAnchor.y - p.y) / uScale;
+  float r2 = X * X + Y * Y;
+  if (r2 >= 1.0) { // space with an atmosphere halo around the limb
+    float dpx = (sqrt(r2) - 1.0) * uScale;
+    vec3 col = space(p) + vec3(0.30, 0.56, 1.0) * exp(-dpx / (uScale * 0.04 + 3.0)) * 0.8 * (1.0 - uFlat);
+    outColor = vec4(col, 1.0);
+    return;
+  }
+  float z = sqrt(1.0 - r2);
+  vec3 v = z * uC + X * uE + Y * uN;  // orthographic inverse: point on the unit sphere
+  float lat = asin(clamp(v.z, -1.0, 1.0)) / RAD, lon = atan(v.y, v.x) / RAD;
+  float boost = (1.0 - uFlat) * clamp(log2(1.0 / max(z, 0.03)), 0.0, 5.0); // blur foreshortened limb
+  vec2 uvw = vec2(fract((lon + 180.0) / 360.0), (90.0 - lat) / 180.0);
+  vec3 col = textureLod(uWorldA, uvw, uLodWorld.x + boost).rgb;
+  if (uMix > 0.0) col = mix(col, textureLod(uWorldB, uvw, uLodWorld.y + boost).rgb, uMix);
+  vec4 s;
+  s = layer(uA3, uExtA[3], uParA[3], lon, lat, boost); col = mix(col, s.rgb, s.a);
+  s = layer(uB3, uExtB[3], uParB[3], lon, lat, boost); col = mix(col, s.rgb, s.a);
+  s = layer(uA2, uExtA[2], uParA[2], lon, lat, boost); col = mix(col, s.rgb, s.a);
+  s = layer(uB2, uExtB[2], uParB[2], lon, lat, boost); col = mix(col, s.rgb, s.a);
+  s = layer(uA1, uExtA[1], uParA[1], lon, lat, boost); col = mix(col, s.rgb, s.a);
+  s = layer(uB1, uExtB[1], uParB[1], lon, lat, boost); col = mix(col, s.rgb, s.a);
+  s = layer(uA0, uExtA[0], uParA[0], lon, lat, boost); col = mix(col, s.rgb, s.a);
+  s = layer(uB0, uExtB[0], uParB[0], lon, lat, boost); col = mix(col, s.rgb, s.a);
+  // Soft sunlight and an atmospheric rim when zoomed out; both vanish when zoomed in so the globe
+  // matches the event image exactly.
+  float light = 0.22 + 0.9 * max(dot(vec3(X, Y, z), normalize(vec3(-0.45, 0.38, 0.81))), 0.0);
+  col *= mix(min(light, 1.08), 1.0, uFlat);
+  col += vec3(0.30, 0.56, 1.0) * pow(1.0 - z, 3.0) * 0.55 * (1.0 - uFlat);
+  if (uDim > 0.0) {
+    vec2 d = max(uFocus.xy - p, p - uFocus.xy - uFocus.zw);
+    col *= 1.0 - uDim * smoothstep(0.0, 48.0, max(d.x, d.y));
+  }
+  outColor = vec4(col, 1.0);
+}
+</script>
 </head>
 <body>
-<main class="page">
-  <header class="heading">
-    <div><h1>How do wildfires and floods change the landscape?</h1><p class="subtitle">NASA MODIS Terra corrected reflectance, rendered by NASA GIBS at 960 × 640 px. Each event keeps one fixed area across 4–5 hand-picked dates; images are not otherwise processed.</p></div>
-    <p class="intro">Compare observations from three events by date and image type. Drag the divider to reveal each image.</p>
-  </header>
-  <section class="explorer" aria-label="Satellite image comparison">
-    <div class="toolbar">
-      <div class="field event"><label for="event">Event</label><select id="event"></select></div>
-      <fieldset class="field bands"><legend>Image type</legend><div class="segmented"><label><input type="radio" name="bands" value="true"><span>Natural color</span></label><label><input type="radio" name="bands" value="false" checked><span>False color · 7-2-1</span></label></div></fieldset>
-    </div>
-    <div class="comparison-head"><div><h2 id="event-title"></h2></div><p id="event-summary"></p></div>
-    <div class="date-controls">
-      <div class="field"><label for="earlier">Left image</label><select id="earlier"></select><p id="earlier-note" class="date-note"></p></div>
-      <button id="swap" class="swap" type="button" aria-label="Swap left and right dates" title="Swap dates">⇄</button>
-      <div class="field"><label for="later">Right image</label><select id="later"></select><p id="later-note" class="date-note"></p></div>
-    </div>
-    <div class="viewer-wrap">
-      <div id="viewer" class="viewer"><img class="fallback" src="assets/dixie-2021-09-21-false.jpg" alt="MODIS false-color image of the Dixie Fire region on September 21, 2021"></div>
-      <div class="image-label left" id="left-label"></div><div class="image-label right" id="right-label"></div>
-      <div class="zoom-controls" aria-label="Image zoom controls"><button id="zoom-in" type="button" aria-label="Zoom in">+</button><button id="zoom-out" type="button" aria-label="Zoom out">−</button><button id="zoom-reset" type="button">Reset</button></div>
-    </div>
-    <p class="zoom-hint">Zoom with the buttons or scroll; hold Shift and drag to pan.</p>
-    <div id="color-key" class="color-key" aria-label="False color key">
-      <span class="key-title">False color key (approximate)</span>
-      <ul>
-        <li><i style="background:#3cb043"></i>Vegetation</li>
-        <li><i style="background:#7b3222"></i>Burn scar</li>
-        <li><i style="background:#0c1220"></i>Water, flooding</li>
-        <li><i style="background:#c8ad85"></i>Bare soil, dry land</li>
-        <li><i style="background:#f2f5f4"></i>Cloud</li>
-        <li><i style="background:#45cde3"></i>Ice cloud, snow</li>
-        <li><i style="background:#8fc0c8"></i>Smoke</li>
-        <li><i style="background:#ff7a2e"></i>Active fire</li>
-      </ul>
-    </div>
-    <div class="slider-heading"><label for="divider">Image divider</label><span>Drag the divider or use the slider</span></div>
-    <input id="divider" type="range" min="0" max="100" value="50" aria-label="Move image divider" aria-valuetext="50% left image">
-    <div class="slider-ends"><span>More right image</span><span>More left image</span></div>
-    <div class="details"><p id="band-description"></p><p>Each pair uses the same geographic extent and image type. Dates are selected observations, not a continuous sequence; a later image may show an event still in progress.</p><p>Clouds, smoke, seasonal conditions and lighting can change appearances. These rendered images are not measurements of damage or change.</p></div>
-    <footer><span>MODIS imagery via <a href="https://nasa-gibs.github.io/gibs-api-docs/access-basics/">NASA GIBS</a></span><a id="source" target="_blank" rel="noopener noreferrer">NASA event context ↗</a></footer>
+<canvas id="globe" aria-hidden="true"></canvas>
+<svg id="globe-overlay" aria-hidden="true"><g class="fallback-globe"></g><g class="markers"></g></svg>
+<div class="stage">
+  <nav class="topbar glass" aria-label="Story navigation">
+    <a class="brand" href="#top">Landscape change from orbit</a>
+    <ol class="stops" id="stops"></ol>
+    <fieldset class="bands"><legend class="visually-hidden">Image type</legend><div class="segmented"><label><input type="radio" name="bands" value="true"><span>Natural<span class="long"> color</span></span></label><label><input type="radio" name="bands" value="false" checked><span>False color<span class="long"> · 7-2-1</span></span></label></div></fieldset>
+  </nav>
+  <section class="frame" id="frame" aria-label="Satellite image comparison">
+    <div id="viewer" class="viewer"><img class="fallback" src="assets/dixie-2021-09-21-false.jpg" alt="MODIS false-color image of the Dixie Fire region on September 21, 2021"></div>
+    <div class="image-label left" id="left-label"></div><div class="image-label right" id="right-label"></div>
+    <div class="zoom-controls" aria-label="Image zoom controls"><button id="zoom-in" type="button" aria-label="Zoom in">+</button><button id="zoom-out" type="button" aria-label="Zoom out">−</button><button id="zoom-reset" type="button">Reset</button></div>
   </section>
-  <section class="writeup" aria-labelledby="writeup-title">
+  <div class="dock glass" id="dock">
+    <div class="dates-row">
+      <div class="date-field"><label for="earlier">Left</label><select id="earlier"></select></div>
+      <button id="swap" class="swap" type="button" aria-label="Swap left and right dates" title="Swap dates">⇄</button>
+      <div class="date-field"><label for="later">Right</label><select id="later"></select></div>
+    </div>
+    <div class="divider-row">
+      <label for="divider">Divider</label>
+      <input id="divider" type="range" min="0" max="100" value="50" aria-valuetext="50% left image">
+      <span>Zoom: +/−, pinch, or Ctrl/⌘ + scroll · Shift-drag to pan</span>
+    </div>
+    <div id="color-key" class="color-key" aria-label="False color key">
+      <span class="key-title">False color key · click one or more to isolate</span>
+      <ul id="key-list"></ul>
+      <button id="key-clear" class="key-clear" type="button" hidden>Show all colors</button>
+      <p id="key-status" class="key-status" aria-live="polite"></p>
+    </div>
+  </div>
+</div>
+<main class="story" id="story">
+  <section class="step step-hero" id="top">
+    <div class="card hero-card glass">
+      <p class="kicker">NASA MODIS · five events</p>
+      <h1>How do wildfires and floods change the landscape?</h1>
+      <p class="subtitle">NASA MODIS Terra corrected reflectance, rendered by NASA GIBS at 960 × 640 px. Each event keeps one fixed area across 4–5 hand-picked dates; images are not otherwise processed.</p>
+      <p class="intro">Scroll to fly between five events on the globe. At each stop, drag the divider to compare two dates, and click one or more colors in the key to isolate them.</p>
+      <p class="scroll-cue">Scroll to begin <span aria-hidden="true">↓</span></p>
+    </div>
+  </section>
+  <div id="steps"></div>
+  <section class="step step-outro" id="about">
+    <div class="outro">
+      <section class="card glass" aria-labelledby="about-title">
+        <p class="kicker">About the imagery</p>
+        <h2 id="about-title">How to read these images</h2>
+        <div class="details"><p id="band-description"></p><p>Each pair uses the same geographic extent and image type. Dates are selected observations, not a continuous sequence; a later image may show an event still in progress.</p><p>Clouds, smoke, seasonal conditions and lighting can change appearances. These rendered images are not measurements of damage or change.</p></div>
+        <footer><span>MODIS imagery via <a href="https://nasa-gibs.github.io/gibs-api-docs/access-basics/">NASA GIBS</a></span><span>Globe: NASA GIBS MODIS imagery from the six days around each event, combined to remove sun glint and gaps; areas in polar darkness that week are filled from the other events’ dates · fallback outlines from Natural Earth via <a href="https://github.com/topojson/world-atlas">world-atlas</a></span></footer>
+      </section>
+      <section class="card glass writeup" aria-labelledby="writeup-title">
     <h2 id="writeup-title">Project writeup</h2>
     <h3>Design decisions</h3>
     <p>We used MODIS Terra Imagery from NASA GIBS and made false color (bands 7-2-1) the default. The reason for this decision is because in the natural color, smoke hides a lot of the ground and much of the burn scars blend in with the rest of the landscape. In the 7-2-1, vegetation is bright green, burn scars are red-brown, and water is black, so the changes stand out. However, just the visual is not intuitive because the colors have a lot more contrast than the natural color which is what we see as intuitive. As a result, we added a color key so the viewers can read those colors a lot easier. Within each event, the images cover the same exact area so the differences in the images come from the landscape and not the framing. Each date also has a short note as some of the images are covered by smoke or clouds as it could confuse the reader without it.</p>
@@ -136,12 +316,15 @@ button:focus-visible, select:focus-visible, input:focus-visible { outline: 3px s
       <li><strong>Process:</strong> Describe how development went and which aspects took the most time.</li>
     </ul>
   </section>
+    </div>
+  </section>
 </main>
 <script>
-/* Interactive comparison of locally saved NASA MODIS imagery. */
+/* Full-screen story: a WebGL globe of NASA imagery behind everything, with the D3 date comparison placed
+   exactly over each event's spot on the globe. Scrolling flies from orbit into each event and back out. */
 (() => {
   'use strict';
-  const W = 960, H = 640;
+  const W = 960, H = 640; // comparison image size (SVG viewBox)
   const events = [
     {id:'dixie', title:'Dixie Fire · California, 2021', summary:'NASA documented multiple burn scars in the September 21 image, including the Dixie Fire.', source:'https://earthobservatory.nasa.gov/images/148913/a-multi-dimensional-fire-challenge', left:0, right:2, dates:[
       ['2021-07-10','July 10, 2021','Earlier image, before the Dixie Fire started in mid-July.'],
@@ -158,63 +341,519 @@ button:focus-visible, select:focus-visible, input:focus-visible { outline: 3px s
       ['2019-02-20','February 20, 2019','Before the first reported satellite detections.'],
       ['2019-02-23','February 23, 2019','First reported satellite detections; clouds obscure much of the view.'],
       ['2019-02-27','February 27, 2019','NASA documented the active fire and a burn scar.'],
-      ['2019-03-15','March 15, 2019','A later observation; cloud cover is still present.']]}
+      ['2019-03-15','March 15, 2019','A later observation; cloud cover is still present.']]},
+    {id:'riogrande', title:'Rio Grande do Sul floods · Brazil, 2024', summary:'NASA published MODIS images from April 20 and May 6, 2024, before and during flooding around Porto Alegre.', source:'https://earthobservatory.nasa.gov/images/152795/floods-engulf-porto-alegre', left:0, right:1, dates:[
+      ['2024-04-20','April 20, 2024','Before the flooding; NASA used this date as its “before” image.'],
+      ['2024-05-06','May 6, 2024','During the flooding; NASA used this date to show the flooded area.'],
+      ['2024-05-14','May 14, 2024','About a week later; clouds cover the northern part of the view.'],
+      ['2024-06-12','June 12, 2024','A later observation; scattered clouds are present.']]},
+    {id:'kangaroo', title:'Kangaroo Island fires · Australia, 2019–2020', summary:'NASA’s Terra satellite showed burn scars across about a third of the island by January 7, 2020.', source:'https://earthobservatory.nasa.gov/images/146132/fires-ravage-kangaroo-island', left:0, right:2, dates:[
+      ['2019-12-16','December 16, 2019','Before the large fires; NASA used this date as its “before” image.'],
+      ['2020-01-03','January 3, 2020','Fires burning; smoke drifts from the western part of the island.'],
+      ['2020-01-07','January 7, 2020','NASA reported burn scars on about a third of the island, with some areas still burning.'],
+      ['2020-01-14','January 14, 2020','A week later; low clouds cover the sea to the south.'],
+      ['2020-02-04','February 4, 2020','About a month later; clouds cover part of the south coast.']]}
   ];
-  const eventSelect = d3.select('#event'), leftSelect = d3.select('#earlier'), rightSelect = d3.select('#later');
+  // Tour order: eastward around the world.
+  const ORDER = ['dixie', 'riogrande', 'kenya', 'pakistan', 'kangaroo'];
+  events.sort((a, b) => ORDER.indexOf(a.id) - ORDER.indexOf(b.id));
+  // Image extents come from download_imagery.sh (EPSG:4326 bounding boxes: [west, south, east, north]).
+  const EXTRA = {
+    dixie: {short: 'Dixie Fire', nav: 'Dixie Fire', bbox: [-122.0, 39.4, -120.5, 40.4],
+      hint: 'Click <b>Burn scar</b> in the key, then drag the divider between July 10 and September 21 to see where the fire burned.'},
+    pakistan: {short: 'Indus River floods', nav: 'Indus River', bbox: [68.5, 27.7, 70.45, 29.0],
+      hint: 'Click <b>Water, flooding</b> in the key and compare September 1 with September 13 to see the river spread.'},
+    kenya: {short: 'Mount Kenya fire', nav: 'Mount Kenya', bbox: [36.65, -0.45, 37.85, 0.35],
+      hint: 'Clouds cover much of this area. Switch the right image to February 27, when NASA documented the active fire and a burn scar.'},
+    riogrande: {short: 'Rio Grande do Sul floods', nav: 'Rio Grande do Sul', bbox: [-53.0, -30.8, -50.0, -28.8],
+      hint: 'Click <b>Water, flooding</b> in the key, then compare April 20 with May 6 to see the rivers spread across their valleys.'},
+    kangaroo: {short: 'Kangaroo Island fires', nav: 'Kangaroo Island', bbox: [136.3, -36.52, 138.31, -35.18],
+      hint: 'Click <b>Burn scar</b> in the key and compare December 16 with January 7 to see how much of the island burned.'}
+  };
+  events.forEach((e, i) => {
+    Object.assign(e, EXTRA[e.id]);
+    e.index = i;
+    e.center = [(e.bbox[0] + e.bbox[2]) / 2, (e.bbox[1] + e.bbox[3]) / 2];
+  });
+  const rad = Math.PI / 180;
+  const clamp01 = v => Math.max(0, Math.min(1, v));
+  const ease = d3.easeSinInOut; // even pace: peaks at ~1.6× average speed (cubic peaks at 3×)
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const band = () => d3.select('input[name="bands"]:checked').property('value');
+  function fileFor(e, date, b) { return `assets/${e.id === 'kenya' ? '' : e.id + '-'}${date}-${b}.jpg`; }
+  // An event's extent scaled f times about its center, cut off at the map edges as in download_globe.sh
+  // (one request can't cross 180° longitude).
+  function around(e, f) {
+    const hw = (e.bbox[2] - e.bbox[0]) / 2 * f, hh = (e.bbox[3] - e.bbox[1]) / 2 * f;
+    return [Math.max(e.center[0] - hw, -180), Math.max(e.center[1] - hh, -90), Math.min(e.center[0] + hw, 180), Math.min(e.center[1] + hh, 90)];
+  }
+
+  /* ---- Comparison (D3 SVG inside the frame) ---- */
+  const leftSelect = d3.select('#earlier'), rightSelect = d3.select('#later');
   d3.select('#viewer .fallback').remove();
-  const svg = d3.select('#viewer').append('svg').attr('viewBox',`0 0 ${W} ${H}`).attr('role','img');
-  const clip = svg.append('defs').append('clipPath').attr('id','left-clip').append('rect').attr('height',H);
+  const svg = d3.select('#viewer').append('svg').attr('viewBox', `0 0 ${W} ${H}`).attr('preserveAspectRatio', 'none').attr('role', 'img');
+  const clip = svg.append('defs').append('clipPath').attr('id', 'left-clip').append('rect').attr('height', H);
   const scene = svg.append('g');
-  const rightImage = scene.append('image').attr('width',W).attr('height',H);
-  // The clipping region stays in screen coordinates while both images pan and zoom together.
-  const leftLayer = svg.append('g').attr('clip-path','url(#left-clip)').append('g');
-  const leftImage = leftLayer.append('image').attr('width',W).attr('height',H);
-  const handle = svg.append('g').attr('class','handle').attr('aria-hidden','true');
-  handle.append('line').attr('y2',H);
-  handle.append('circle').attr('cy',H/2).attr('r',28);
-  handle.append('text').attr('y',H/2+8).attr('text-anchor','middle').text('↔');
+  const rightImage = scene.append('image').attr('width', W).attr('height', H).attr('preserveAspectRatio', 'none');
+  const leftLayer = svg.append('g').attr('clip-path', 'url(#left-clip)').append('g');
+  const leftImage = leftLayer.append('image').attr('width', W).attr('height', H).attr('preserveAspectRatio', 'none');
+  const handle = svg.append('g').attr('class', 'handle').attr('aria-hidden', 'true');
+  handle.append('line').attr('y2', H);
+  handle.append('circle').attr('cy', H / 2).attr('r', 28);
+  handle.append('text').attr('y', H / 2 + 8).attr('text-anchor', 'middle').text('↔');
   const range = d3.select('#divider');
   let current = events[0];
-  const zoom = d3.zoom().scaleExtent([1,4]).extent([[0,0],[W,H]]).translateExtent([[0,0],[W,H]])
-    .filter(event => event.type === 'wheel' || event.type === 'touchstart' || (event.type === 'mousedown' && event.shiftKey))
-    .on('zoom', event => {scene.attr('transform',event.transform); leftLayer.attr('transform',event.transform);});
-  svg.call(zoom).on('dblclick.zoom',null);
-  const drag = d3.drag().filter(event => !event.shiftKey && event.type !== 'touchstart').on('start drag', event => setDivider(d3.pointer(event.sourceEvent, svg.node())[0] / W * 100));
+  let mode = 'travel'; // 'event' = comparison is interactive
+  const zoom = d3.zoom().scaleExtent([1, 4]).extent([[0, 0], [W, H]]).translateExtent([[0, 0], [W, H]])
+    // Plain scrolling must scroll the story, so wheel-zoom needs Ctrl/⌘ (trackpad pinch sends ctrlKey).
+    .filter(event => mode === 'event' && (event.type === 'wheel' ? (event.ctrlKey || event.metaKey)
+      : event.type === 'touchstart' ? event.touches.length > 1 : event.type === 'mousedown' && event.shiftKey))
+    .on('zoom', event => { scene.attr('transform', event.transform); leftLayer.attr('transform', event.transform); });
+  svg.call(zoom).on('dblclick.zoom', null);
+  const drag = d3.drag().filter(event => mode === 'event' && !event.shiftKey && event.type !== 'touchstart' && !event.button)
+    .on('start drag', event => setDivider(d3.pointer(event.sourceEvent, svg.node())[0] / W * 100));
   svg.call(drag);
   function setDivider(value) {
-    const p = Math.max(0,Math.min(100,value));
-    clip.attr('width',W*p/100); handle.attr('transform',`translate(${W*p/100},0)`);
-    range.property('value',p).attr('aria-valuetext',`${Math.round(p)}% left image`);
+    const p = Math.max(0, Math.min(100, value));
+    clip.attr('width', W * p / 100); handle.attr('transform', `translate(${W * p / 100},0)`);
+    range.property('value', p).attr('aria-valuetext', `${Math.round(p)}% left image`);
   }
-  function file(date, band) { return `assets/${current.id === 'kenya' ? '' : current.id+'-'}${date}-${band}.jpg`; }
+  function setRight(url) { rightImage.attr('href', url); }
+
+  /* ---- Click-to-isolate false colors (D3) ----
+     In 7-2-1 false color, red = shortwave infrared (band 7), green = near infrared (band 2), blue = red light (band 1).
+     Each pixel is sorted into a key category with rules on those three bands, checked in order (fire first,
+     bare soil last). The thresholds were tuned by checking every image here: clouds are bright in all three
+     bands, ice cloud is bright with dark shortwave infrared (cyan), water is dark in both infrared bands (or,
+     when muddy, red light at least as bright as near infrared), and vegetation is near-infrared dominant.
+     The flood events have no fires, so their haze-colored pixels are read as shallow water
+     or the land underneath instead of smoke. Several categories can be selected at once. */
+  const KEY = [
+    {label:'Vegetation', name:'vegetation', swatch:'#3cb043'},
+    {label:'Burn scar', name:'burn scars', swatch:'#8a4430'},
+    {label:'Water, flooding', name:'water', swatch:'#123a6b'},
+    {label:'Bare soil, dry land', name:'bare soil', swatch:'#c8ad85'},
+    {label:'Cloud', name:'cloud', swatch:'#eef5f3'},
+    {label:'Ice cloud, snow', name:'ice cloud and snow', swatch:'#45cde3'},
+    {label:'Smoke', name:'smoke', swatch:'#8fc0c8'},
+    {label:'Active fire', name:'active fire', swatch:'#ff7a2e'}
+  ];
+  const [VEG, BURN, WATER, BARE, CLOUD, ICE, SMOKE, FIRE] = d3.range(KEY.length);
+  const FLOOD_EVENTS = new Set(['pakistan', 'riogrande']);
+  // s = shortwave infrared (red channel), n = near infrared (green), v = red light (blue).
+  function classify(s, n, v, fireEvent) {
+    const L = (s + n + v) / 3, mx = Math.max(s, n, v), mn = Math.min(s, n, v);
+    if (s >= 190 && s - n >= 60 && s - v >= 70) return FIRE;                         // very bright SWIR
+    if (n >= 150 && v >= 150 && v - s >= 60 && Math.abs(n - v) <= 30) return ICE;      // bright cyan
+    if ((L >= 150 && mn >= 105 && n >= s + 10 && Math.abs(n - v) <= 40) || (L >= 200 && mx - mn <= 60)) return CLOUD; // bright, near white
+    if (n <= 60 && s <= 60 && L < 70) return WATER;                                   // dark in both infrared bands
+    if (fireEvent && v >= n + 15 && v >= 100 && s <= 90) return SMOKE;                // blue smoke veil over water
+    if (s <= 75 && v >= n - 6 && v >= s + 40) return WATER;                           // muddy water: red light ≥ NIR
+    if (s <= 140 && v >= s + 35 && n - v <= 35 && n - v >= -40 && L >= 60) {          // blue-teal haze
+      if (fireEvent) return SMOKE;
+      if (s <= 75) return WATER;                                                      // flood events: shallow water
+    }
+    if (n >= s + 8 && n >= v + 8) return VEG;                                        // NIR dominant
+    if (s >= n + 4 && s >= v + 12 && L < 150) return BURN;                            // SWIR above NIR, red-brown
+    return BARE;                                                                      // tan / pink
+  }
+  const selected = new Set();    // KEY indices shown in color; empty = show everything
+  let isolationAvailable = true; // false if the browser blocks reading pixels (e.g. opened via file://)
+  let renderToken = 0;
+  const pixelCache = new Map(), maskCache = new Map();
+  // Load an image with d3.image, draw it to a d3-created canvas, and classify every pixel.
+  function loadPixels(url, fireEvent) {
+    if (!pixelCache.has(url)) pixelCache.set(url, d3.image(url).then(img => {
+      const canvas = d3.create('canvas').attr('width', img.naturalWidth).attr('height', img.naturalHeight).node();
+      const ctx = canvas.getContext('2d', {willReadFrequently: true});
+      ctx.drawImage(img, 0, 0);
+      const {data} = ctx.getImageData(0, 0, canvas.width, canvas.height); // throws if the canvas is tainted
+      const cls = new Uint8Array(canvas.width * canvas.height);
+      for (let i = 0, p = 0; i < cls.length; i++, p += 4) cls[i] = classify(data[p], data[p+1], data[p+2], fireEvent);
+      return {width: canvas.width, height: canvas.height, data, cls};
+    }));
+    return pixelCache.get(url);
+  }
+  // Returns an object URL for a version of the image where only the selected categories keep their color.
+  function isolatedImage(url, fireEvent, picks) {
+    const cacheKey = `${url}|${picks.join(',')}`;
+    if (!maskCache.has(cacheKey)) maskCache.set(cacheKey, loadPixels(url, fireEvent).then(({width, height, data, cls}) => {
+      const keep = new Uint8Array(KEY.length); picks.forEach(k => { keep[k] = 1; });
+      const canvas = d3.create('canvas').attr('width', width).attr('height', height).node();
+      const ctx = canvas.getContext('2d');
+      const out = ctx.createImageData(width, height), o = out.data;
+      for (let i = 0, p = 0; i < cls.length; i++, p += 4) {
+        if (keep[cls[i]]) { o[p] = data[p]; o[p+1] = data[p+1]; o[p+2] = data[p+2]; }
+        else { o[p] = o[p+1] = o[p+2] = 60 + 0.45 * (0.299*data[p] + 0.587*data[p+1] + 0.114*data[p+2]); }
+        o[p+3] = 255;
+      }
+      ctx.putImageData(out, 0, 0);
+      return new Promise((resolve, reject) => canvas.toBlob(blob => blob ? resolve(URL.createObjectURL(blob)) : reject(new Error('toBlob failed')), 'image/png'));
+    }));
+    return maskCache.get(cacheKey);
+  }
+  const picksList = () => [...selected].sort(d3.ascending);
+  const viewerSvg = d3.select('#viewer svg');
+  function setImages(leftUrl, rightUrl, band) {
+    const token = ++renderToken;
+    if (band === 'true' || selected.size === 0 || !isolationAvailable) {
+      leftImage.attr('href', leftUrl); setRight(rightUrl);
+      viewerSvg.interrupt('isolate').style('opacity', 1); return;
+    }
+    const fireEvent = !FLOOD_EVENTS.has(current.id), picks = picksList();
+    viewerSvg.transition('isolate').duration(150).style('opacity', 0.7);
+    Promise.all([isolatedImage(leftUrl, fireEvent, picks), isolatedImage(rightUrl, fireEvent, picks)])
+      .then(([l, r]) => { if (token === renderToken) { leftImage.attr('href', l); setRight(r); } })
+      .catch(err => {
+        console.warn('Color isolation unavailable:', err);
+        isolationAvailable = false; selected.clear(); updateKey();
+        if (token === renderToken) { leftImage.attr('href', leftUrl); setRight(rightUrl); }
+      })
+      .finally(() => { if (token === renderToken) viewerSvg.transition('isolate').duration(250).style('opacity', 1); });
+  }
+  // Legend: one toggle button per KEY entry via a D3 data join. Click to add or remove a category.
+  const keyButtons = d3.select('#key-list').selectAll('li').data(KEY).join('li')
+    .append('button').attr('type', 'button').attr('class', 'key-item');
+  keyButtons.append('i').style('background', d => d.swatch);
+  keyButtons.append('span').text(d => d.label);
+  keyButtons.on('click', (event, d) => {
+    const i = KEY.indexOf(d);
+    if (selected.has(i)) selected.delete(i); else selected.add(i);
+    updateKey(); refresh();
+  });
+  d3.select('#key-clear').on('click', () => { selected.clear(); updateKey(); refresh(); });
+  const listFormat = new Intl.ListFormat('en', {type: 'conjunction'});
+  const selectedLabels = () => listFormat.format(picksList().map(i => KEY[i].name));
+  function updateKey() {
+    const any = selected.size > 0;
+    keyButtons.attr('aria-pressed', (d, i) => String(selected.has(i)))
+      .attr('title', (d, i) => selected.has(i) ? `Remove ${d.name} from the selection` : any ? `Also show ${d.name}` : `Show only ${d.name}`)
+      .property('disabled', !isolationAvailable)
+      .classed('dimmed', (d, i) => any && !selected.has(i))
+      .transition().duration(200)
+      .style('opacity', (d, i) => !isolationAvailable || (any && !selected.has(i)) ? 0.55 : 1);
+    d3.select('#key-clear').property('hidden', !any);
+    d3.select('#key-status').classed('warn', !isolationAvailable).text(
+      !isolationAvailable ? 'Color isolation needs the page to be served from a web server (it works on GitHub Pages; locally, run “python3 -m http.server” in the project folder).'
+      : !any ? ''
+      : `Showing only ${selectedLabels()} in color; the rest is grayscale. Pixels are sorted by their band values, so edges and thin haze are approximate.`);
+  }
+
+
+  function setLabel(selection, side, d) { selection.text(`${side} · ${d[1]}`).append('small').text(d[2]); }
   function refresh() {
     const left = current.dates.find(d => d[0] === leftSelect.property('value'));
     const right = current.dates.find(d => d[0] === rightSelect.property('value'));
-    const band = d3.select('input[name="bands"]:checked').property('value');
-    leftImage.attr('href',file(left[0],band)); rightImage.attr('href',file(right[0],band));
-    d3.select('#left-label').text(`LEFT · ${left[1]}`); d3.select('#right-label').text(`RIGHT · ${right[1]}`);
-    d3.select('#earlier-note').text(left[2]); d3.select('#later-note').text(right[2]);
-    svg.attr('aria-label',`${current.title}: left image ${left[1]}, right image ${right[1]}, ${band === 'true' ? 'natural color' : 'false color bands 7-2-1'}.`);
-    d3.select('#band-description').text(band === 'true' ? 'Natural color imagery uses visible light, close to what the eye would see. Switch to false color to see the color key.' : 'False color combines shortwave infrared, near infrared, and red light (bands 7-2-1). Colors do not have the same meaning as in natural color; see the key above.');
-    d3.select('#color-key').property('hidden', band === 'true');
+    const b = band();
+    setImages(fileFor(current, left[0], b), fileFor(current, right[0], b), b);
+    d3.select('#left-label').call(setLabel, 'LEFT', left);
+    d3.select('#right-label').call(setLabel, 'RIGHT', right);
+    const iso = b === 'false' && selected.size ? `, showing only ${selectedLabels()} in color` : '';
+    svg.attr('aria-label', `${current.title}: left image ${left[1]}, right image ${right[1]}, ${b === 'true' ? 'natural color' : 'false color bands 7-2-1'}${iso}.`);
+    d3.select('#band-description').text(b === 'true' ? 'Natural color imagery uses visible light, close to what the eye would see. Switch to false color to see the color key.' : 'False color combines shortwave infrared, near infrared, and red light (bands 7-2-1). Colors do not have the same meaning as in natural color; see the key, and click colors in the key to isolate them on both images (select several to compare, e.g. burn scar and active fire).');
+    d3.select('#color-key').property('hidden', b === 'true');
   }
-  function selectEvent(id) {
-    current = events.find(e => e.id === id);
-    d3.select('#event-title').text(current.title); d3.select('#event-summary').text(current.summary); d3.select('#source').attr('href',current.source);
-    [leftSelect,rightSelect].forEach(select => select.selectAll('option').data(current.dates).join('option').attr('value',d=>d[0]).text(d=>d[1]));
-    leftSelect.property('value',current.dates[current.left][0]); rightSelect.property('value',current.dates[current.right][0]);
-    svg.call(zoom.transform,d3.zoomIdentity); setDivider(50); refresh();
+  function selectEvent(e) {
+    current = e;
+    [leftSelect, rightSelect].forEach(select => select.selectAll('option').data(current.dates).join('option').attr('value', d => d[0]).text(d => d[1]));
+    leftSelect.property('value', current.dates[current.left][0]); rightSelect.property('value', current.dates[current.right][0]);
+    svg.call(zoom.transform, d3.zoomIdentity); setDivider(50); refresh();
   }
-  eventSelect.selectAll('option').data(events).join('option').attr('value',d=>d.id).text(d=>d.title);
-  eventSelect.on('change',event=>selectEvent(event.target.value));
-  leftSelect.on('change',refresh); rightSelect.on('change',refresh);
-  d3.selectAll('input[name="bands"]').on('change',refresh);
-  range.on('input',event=>setDivider(+event.target.value));
-  d3.select('#swap').on('click',() => {const a=leftSelect.property('value'); leftSelect.property('value',rightSelect.property('value')); rightSelect.property('value',a); refresh();});
-  d3.select('#zoom-in').on('click',()=>svg.call(zoom.scaleBy,1.5,[W/2,H/2]));
-  d3.select('#zoom-out').on('click',()=>svg.call(zoom.scaleBy,1/1.5,[W/2,H/2]));
-  d3.select('#zoom-reset').on('click',()=>svg.call(zoom.transform,d3.zoomIdentity));
-  selectEvent(events[0].id);
+
+  /* ---- Layout: the comparison frame, its control dock, and the globe's size ---- */
+  let vw = 0, vh = 0, dpr = 1, frameRect = null, globeScale = 300, globeAnchor = [0, 0];
+  // Globe center on screen: the frame center when zoomed into an event (so the two line up exactly);
+  // on narrow screens the zoomed-out globe sits a little lower, clear of the top bar.
+  const anchorFor = v => {
+    const fx = frameRect.x + frameRect.w / 2, fy = frameRect.y + frameRect.h / 2;
+    return [fx + (globeAnchor[0] - fx) * (1 - v.z), fy + (globeAnchor[1] - fy) * (1 - v.z)];
+  };
+  function layout() {
+    vw = window.innerWidth; vh = window.innerHeight; dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const wide = vw >= 900;
+    const left = wide ? Math.min(400, vw * 0.3) + 40 : 8, right = wide ? 24 : 8;
+    const top = wide ? 78 : 58, bottom = wide ? 150 : 150;
+    const availW = vw - left - right, availH = vh - top - bottom;
+    const w = Math.max(200, Math.min(availW, availH * 1.5)), h = w / 1.5;
+    frameRect = {x: left + (availW - w) / 2, y: wide ? top + (availH - h) / 2 : top, w, h};
+    d3.select('#frame').style('left', `${frameRect.x}px`).style('top', `${frameRect.y}px`).style('width', `${w}px`).style('height', `${h}px`);
+    d3.select('#dock').style('left', `${frameRect.x}px`).style('top', `${frameRect.y + h + 10}px`).style('width', `${w}px`);
+    globeScale = Math.min(availW, wide ? vh - top - 40 : vh * 0.62) * 0.42;
+    globeAnchor = wide ? [frameRect.x + w / 2, frameRect.y + h / 2] : [vw / 2, Math.max(frameRect.y + h / 2, top + globeScale + 28)];
+    // Zoomed into an event, its latitude span fills the frame height and a horizontal stretch makes its
+    // longitude span fill the width, so the globe lines up with the flat 960×640 image.
+    const projection = d3.geoOrthographic();
+    events.forEach(e => {
+      e.scale = (h / 2) / Math.sin((e.bbox[3] - e.bbox[1]) * rad / 2);
+      projection.rotate([-e.center[0], -e.center[1]]).scale(e.scale).translate([0, 0]);
+      e.stretch = w / (projection([e.bbox[2], e.center[1]])[0] - projection([e.bbox[0], e.center[1]])[0]);
+    });
+    glCanvas.width = Math.round(vw * dpr); glCanvas.height = Math.round(vh * dpr);
+    lastKey = '';
+  }
+
+  /* ---- Story steps, generated from the event data with a D3 join ---- */
+  const last = events[events.length - 1];
+  const stepData = [{kind: 'travel', from: null, to: events[0]}];
+  events.forEach((e, i) => { stepData.push({kind: 'event', event: e}); stepData.push({kind: 'travel', from: e, to: events[i + 1] || null}); });
+  const generated = d3.select('#steps').selectAll('section').data(stepData).join('section').attr('class', d => `step step-${d.kind}`);
+  const eventCards = generated.filter(d => d.kind === 'event').append('div').attr('class', 'card glass');
+  eventCards.append('p').attr('class', 'kicker').text(d => `Stop ${d.event.index + 1} of ${events.length}`);
+  eventCards.append('h2').text(d => d.event.title);
+  eventCards.append('p').text(d => d.event.summary);
+  eventCards.append('p').attr('class', 'try').html(d => `<strong>Try it:</strong> ${d.event.hint}`);
+  eventCards.append('p').append('a').attr('href', d => d.event.source).attr('target', '_blank').attr('rel', 'noopener noreferrer').text('NASA event context ↗');
+  const km = d => d3.format(',')(Math.round(d3.geoDistance(d.from.center, d.to.center) * 6371 / 100) * 100);
+  const travelCards = generated.filter(d => d.kind === 'travel').append('div').attr('class', 'card glass');
+  travelCards.append('p').attr('class', 'kicker').text(d => d.from && d.to ? 'Next stop' : d.to ? 'First stop' : 'Back to orbit');
+  travelCards.append('h2').text(d => d.to ? d.to.title : 'Five events, five continents');
+  travelCards.append('p').text(d => d.from && d.to ? `About ${km(d)} km from the ${d.from.short}. Keep scrolling to zoom in.`
+    : d.to ? 'Keep scrolling to zoom in.' : 'Every image here is from the same NASA instrument, MODIS on the Terra satellite. Scroll on for notes on reading the imagery and the project writeup.');
+  d3.select('#top').datum({kind: 'hero'});
+  d3.select('#about').datum({kind: 'outro'});
+  const steps = d3.selectAll('#story .step');
+
+  // Navigation: Intro, one button per event, About.
+  const stops = [{label: 'Intro', kind: 'hero'}, ...events.map(e => ({label: e.nav, kind: 'event', event: e})), {label: 'About', kind: 'outro'}];
+  const stopButtons = d3.select('#stops').selectAll('li').data(stops).join('li').append('button').attr('type', 'button')
+    .attr('title', d => d.label).attr('aria-label', d => d.label);
+  stopButtons.append('span').attr('class', 'label').text(d => d.label);
+  function scrollToStop(d) {
+    const node = steps.filter(s => s.kind === d.kind && (d.kind !== 'event' || s.event === d.event)).node();
+    const top = d.kind === 'hero' ? 0 : node.getBoundingClientRect().top + window.scrollY - (d.kind === 'event' ? window.innerHeight * 0.3 : 0);
+    window.scrollTo({top, behavior: reduceMotion ? 'auto' : 'smooth'});
+  }
+  stopButtons.on('click', (event, d) => scrollToStop(d));
+
+  /* ---- Camera: where the globe looks, from scroll position and time ---- */
+  let heroLon = -100, outroLon = last.center[0], lastTime = performance.now();
+  const heroCenter = () => [heroLon, 18], outroCenter = () => [outroLon, 12];
+  function eventView(e) {
+    return {center: e.center, scale: e.scale, stretch: e.stretch, z: 1, A: e, B: null, worldA: e, worldB: e, mix: 0, comp: 1, target: e};
+  }
+  function globeView(center, worldEvent) {
+    return {center, scale: globeScale, stretch: 1, z: 0, A: null, B: null, worldA: worldEvent, worldB: worldEvent, mix: 0, comp: 0, target: worldEvent};
+  }
+  // p in [0, 1]. Between two events: zoom out (0–0.45), turn along the great circle (0.3–0.7), zoom in (0.55–1).
+  // From or to the open globe, only half of that.
+  function travelView(a, b, p) {
+    const ca = a ? a.center : heroCenter(), cb = b ? b.center : outroCenter();
+    let z, ev, turn;
+    if (a && b) { ev = p < 0.5 ? a : b; z = p < 0.5 ? 1 - ease(clamp01(p / 0.45)) : ease(clamp01((p - 0.55) / 0.45)); turn = ease(clamp01((p - 0.3) / 0.4)); }
+    else if (b) { ev = b; z = ease(clamp01((p - 0.3) / 0.7)); turn = ease(clamp01(p / 0.6)); }
+    else { ev = a; z = 1 - ease(clamp01(p / 0.7)); turn = ease(clamp01((p - 0.4) / 0.6)); }
+    const scale = Math.exp(d3.interpolateNumber(Math.log(globeScale), Math.log(ev.scale))(z));
+    const target = a && b ? (p < 0.5 ? a : b) : ev;
+    const comp = a && b ? (p < 0.5 ? 1 - clamp01(p / 0.06) : clamp01((p - 0.94) / 0.06)) : b ? clamp01((p - 0.94) / 0.06) : 1 - clamp01(p / 0.06);
+    return {center: d3.geoInterpolate(ca, cb)(turn), scale, stretch: 1 + (ev.stretch - 1) * z * z, z,
+      A: a || b, B: a && b ? b : null, worldA: a || b, worldB: b || a, mix: a && b ? clamp01((p - 0.4) / 0.2) : 0, comp, target};
+  }
+  // The camera follows a smoothed copy of the scroll position, so a quick flick of the wheel glides.
+  let smoothY = window.scrollY;
+  function viewFromScroll() {
+    const mid = vh / 2, lag = window.scrollY - smoothY;
+    let active = null, progress = 0;
+    steps.each(function (d) {
+      const r = this.getBoundingClientRect(), top = r.top + lag, bottom = r.bottom + lag;
+      if (top <= mid && bottom > mid) { active = d; progress = (mid - top) / r.height; }
+    });
+    if (!active) active = steps.node().getBoundingClientRect().top + lag > mid ? {kind: 'hero'} : {kind: 'outro'};
+    if (active.kind === 'hero') return {...globeView(heroCenter(), events[0]), spin: 'hero', stop: 0};
+    if (active.kind === 'outro') return {...globeView(outroCenter(), last), spin: 'outro', stop: stops.length - 1};
+    if (active.kind === 'event') return {...eventView(active.event), stop: active.event.index + 1};
+    const v = travelView(active.from, active.to, clamp01(progress));
+    const near = progress < 0.5 ? active.from : active.to;
+    return {...v, stop: near ? near.index + 1 : active.to ? 0 : stops.length - 1};
+  }
+
+  /* ---- WebGL globe ---- */
+  const glCanvas = document.getElementById('globe');
+  const gl = glCanvas.getContext('webgl2', {antialias: false, alpha: false, powerPreference: 'high-performance'});
+  let program = null, uniform = {};
+  const units = {uWorldA: 0, uWorldB: 1, uA0: 2, uA1: 3, uA2: 4, uA3: 5, uB0: 6, uB1: 7, uB2: 8, uB3: 9};
+  let blank = null;
+  if (gl) {
+    const compile = (type, source) => {
+      const s = gl.createShader(type); gl.shaderSource(s, source); gl.compileShader(s);
+      if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s));
+      return s;
+    };
+    program = gl.createProgram();
+    gl.attachShader(program, compile(gl.VERTEX_SHADER, '#version 300 es\nin vec2 aPos; void main() { gl_Position = vec4(aPos, 0.0, 1.0); }'));
+    gl.attachShader(program, compile(gl.FRAGMENT_SHADER, document.getElementById('globe-shader').textContent.trim()));
+    gl.bindAttribLocation(program, 0, 'aPos');
+    gl.linkProgram(program);
+    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(program));
+    gl.useProgram(program);
+    gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW); // one full-screen triangle
+    gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+    ['uRes', 'uDpr', 'uAnchor', 'uScale', 'uStretch', 'uFlat', 'uMix', 'uDim', 'uFocus', 'uStarShift', 'uC', 'uE', 'uN', 'uExtA', 'uExtB', 'uParA', 'uParB', 'uLodWorld']
+      .forEach(name => { uniform[name] = gl.getUniformLocation(program, name); });
+    Object.entries(units).forEach(([name, unit]) => gl.uniform1i(gl.getUniformLocation(program, name), unit));
+    blank = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, blank);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([10, 24, 38, 255]));
+  } else {
+    document.documentElement.classList.add('no-webgl');
+  }
+  const textures = new Map();
+  function texture(url, wrap) {
+    if (!textures.has(url)) {
+      const entry = {tex: null, w: 0, h: 0};
+      textures.set(url, entry);
+      if (gl) d3.image(url).then(img => {
+        entry.tex = gl.createTexture();
+        gl.bindTexture(gl.TEXTURE_2D, entry.tex);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
+        gl.generateMipmap(gl.TEXTURE_2D);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, wrap ? gl.REPEAT : gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        entry.w = img.naturalWidth; entry.h = img.naturalHeight;
+        lastKey = '';
+      }).catch(() => { entry.failed = true; });
+    }
+    return textures.get(url);
+  }
+  // Nested textures per event and image type (built by make_globe_textures.py), finest first:
+  // the event image itself, then 4×, 16× and 48× its extent, then the whole world on that day.
+  const layerSets = new Map();
+  // Bump when make_globe_textures.py is re-run: the version in the URL makes browsers fetch the new textures
+  // instead of reusing cached copies with the same file names.
+  const TEXTURE_VERSION = '2026-11-19';
+  function layersFor(e, b) {
+    const key = `${e.id}-${b}`;
+    if (!layerSets.has(key)) {
+      const date = e.dates[e.right][0], base = `assets/globe/${e.id}-${date}-${b}`;
+      layerSets.set(key, {
+        world: texture(`${base}-world.jpg?v=${TEXTURE_VERSION}`, true),
+        levels: [
+          {entry: texture(fileFor(e, date, b)), extent: e.bbox, feather: 0.03},
+          {entry: texture(`${base}-L1.jpg?v=${TEXTURE_VERSION}`), extent: around(e, 4), feather: 0.12},
+          {entry: texture(`${base}-L2.jpg?v=${TEXTURE_VERSION}`), extent: around(e, 16), feather: 0.12},
+          {entry: texture(`${base}-L3.jpg?v=${TEXTURE_VERSION}`), extent: around(e, 48), feather: 0.12}
+        ]
+      });
+    }
+    return layerSets.get(key);
+  }
+  const lodFor = (texelsPerDeg, scale) => Math.max(0, Math.log2(texelsPerDeg / (scale * rad * dpr)));
+  function bind(unit, entry) { gl.activeTexture(gl.TEXTURE0 + unit); gl.bindTexture(gl.TEXTURE_2D, entry && entry.tex ? entry.tex : blank); }
+  function drawGlobe(v) {
+    const b = band();
+    const [lon, lat] = v.center.map(d => d * rad);
+    gl.viewport(0, 0, glCanvas.width, glCanvas.height);
+    gl.uniform2f(uniform.uRes, glCanvas.width, glCanvas.height);
+    gl.uniform1f(uniform.uDpr, dpr);
+    gl.uniform2f(uniform.uAnchor, ...anchorFor(v));
+    gl.uniform1f(uniform.uScale, v.scale);
+    gl.uniform1f(uniform.uStretch, v.stretch);
+    gl.uniform1f(uniform.uFlat, v.z);
+    gl.uniform1f(uniform.uMix, v.mix);
+    gl.uniform1f(uniform.uDim, 0.5 * clamp01((v.z - 0.85) / 0.15));
+    gl.uniform4f(uniform.uFocus, frameRect.x, frameRect.y, frameRect.w, frameRect.h);
+    gl.uniform2f(uniform.uStarShift, -v.center[0] * 3, v.center[1] * 3);
+    gl.uniform3f(uniform.uC, Math.cos(lat) * Math.cos(lon), Math.cos(lat) * Math.sin(lon), Math.sin(lat));
+    gl.uniform3f(uniform.uE, -Math.sin(lon), Math.cos(lon), 0);
+    gl.uniform3f(uniform.uN, -Math.sin(lat) * Math.cos(lon), -Math.sin(lat) * Math.sin(lon), Math.cos(lat));
+    const wa = layersFor(v.worldA, b).world, wb = layersFor(v.worldB, b).world;
+    bind(units.uWorldA, wa); bind(units.uWorldB, wb);
+    gl.uniform2f(uniform.uLodWorld, lodFor((wa.h || 1024) / 180, v.scale), lodFor((wb.h || 1024) / 180, v.scale));
+    [['A', v.A], ['B', v.B]].forEach(([side, e]) => {
+      const ext = new Float32Array(16), par = new Float32Array(8);
+      const levels = e ? layersFor(e, b).levels : [];
+      for (let i = 0; i < 4; i++) {
+        const level = levels[i];
+        bind(units[`u${side}${i}`], level && level.entry);
+        if (!level || !level.entry.tex) continue;
+        const [w0, s0, e0, n0] = level.extent;
+        ext.set([w0, n0, e0 - w0, n0 - s0], i * 4);
+        par.set([level.feather, lodFor(level.entry.h / (n0 - s0), v.scale)], i * 2);
+      }
+      gl.uniform4fv(uniform[`uExt${side}`], ext); gl.uniform2fv(uniform[`uPar${side}`], par);
+    });
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+  }
+  // Without WebGL 2: a plain vector globe (Natural Earth outlines) in the overlay SVG.
+  let fallbackLand = null;
+  const fallbackGlobe = d3.select('#globe-overlay .fallback-globe');
+  if (!gl) d3.json('assets/countries-110m.json').then(w => { fallbackLand = topojson.feature(w, w.objects.land); lastKey = ''; }).catch(() => {});
+
+  /* ---- Markers and labels for the three events (D3, same projection as the globe) ---- */
+  const overlay = d3.select('#globe-overlay');
+  const markers = overlay.select('.markers').selectAll('g').data(events).join('g').attr('class', 'marker')
+    .on('click', (event, e) => scrollToStop({kind: 'event', event: e}));
+  markers.append('circle').attr('class', 'pulse').attr('r', 5);
+  markers.append('circle').attr('class', 'dot').attr('r', 5);
+  markers.append('text').attr('x', 11).attr('y', 5).text(d => d.short);
+  const projection = d3.geoOrthographic().clipAngle(90);
+  function drawOverlay(v) {
+    const [ax, ay] = anchorFor(v);
+    projection.rotate([-v.center[0], -v.center[1]]).scale(v.scale).translate([ax, ay]);
+    const labelOpacity = clamp01(1 - v.z * 3);
+    markers.style('display', e => labelOpacity > 0 && d3.geoDistance(e.center, v.center) < Math.PI / 2 - 0.08 ? null : 'none')
+      .style('pointer-events', labelOpacity > 0.5 ? null : 'none')
+      .attr('transform', e => { const [x, y] = projection(e.center); return `translate(${ax + (x - ax) * v.stretch},${y})`; })
+      .style('opacity', labelOpacity);
+    if (!gl) {
+      fallbackGlobe.attr('transform', `translate(${ax},0) scale(${v.stretch},1) translate(${-ax},0)`);
+      const path = d3.geoPath(projection);
+      fallbackGlobe.selectAll('path.fallback-sphere').data([{type: 'Sphere'}]).join('path').attr('class', 'fallback-sphere').attr('d', path);
+      fallbackGlobe.selectAll('path.fallback-land').data(fallbackLand ? [fallbackLand] : []).join('path').attr('class', 'fallback-land').attr('d', path);
+    }
+  }
+
+  /* ---- Applying a view to the page ---- */
+  const frameEl = d3.select('#frame'), dockEl = d3.select('#dock');
+  let lastComp = -1, lastStop = -1, lastKey = '';
+  function setMode(next) {
+    if (next === mode) return;
+    mode = next;
+    frameEl.classed('live', mode === 'event'); dockEl.classed('live', mode === 'event');
+    if (mode !== 'event') svg.call(zoom.transform, d3.zoomIdentity);
+  }
+  function apply(v) {
+    if (v.target !== current) selectEvent(v.target);
+    setMode(v.comp > 0.99 ? 'event' : 'travel');
+    if (Math.abs(v.comp - lastComp) > 0.001) {
+      lastComp = v.comp;
+      frameEl.style('opacity', v.comp); dockEl.style('opacity', v.comp);
+    }
+    if (v.stop !== lastStop) { lastStop = v.stop; stopButtons.attr('aria-current', (d, i) => i === v.stop ? 'step' : null); }
+    // Preload imagery for this stop and its neighbours.
+    const b = band();
+    [v.A, v.B, events[current.index + 1], events[current.index - 1]].filter(Boolean).forEach(e => layersFor(e, b));
+  }
+  function tick(now) {
+    requestAnimationFrame(tick);
+    const dt = Math.min(0.1, (now - lastTime) / 1000); lastTime = now;
+    const gap = window.scrollY - smoothY;
+    smoothY = Math.abs(gap) < 0.5 || reduceMotion ? window.scrollY : smoothY + gap * (1 - Math.exp(-dt * 7));
+    const v = viewFromScroll();
+    if (!reduceMotion && v.spin === 'hero') heroLon -= 4 * dt;
+    if (!reduceMotion && v.spin === 'outro') outroLon -= 4 * dt;
+    const key = [v.center[0].toFixed(4), v.center[1].toFixed(4), v.scale.toFixed(2), v.stretch.toFixed(4), v.mix.toFixed(3), v.comp.toFixed(3), band()].join();
+    apply(v);
+    if (key === lastKey) return; // nothing moved: skip redrawing the globe
+    lastKey = key;
+    if (gl) drawGlobe(v);
+    drawOverlay(v);
+  }
+
+  leftSelect.on('change', refresh); rightSelect.on('change', refresh);
+  d3.selectAll('input[name="bands"]').on('change', () => { refresh(); lastKey = ''; });
+  range.on('input', event => setDivider(+event.target.value));
+  d3.select('#swap').on('click', () => { const a = leftSelect.property('value'); leftSelect.property('value', rightSelect.property('value')); rightSelect.property('value', a); refresh(); });
+  d3.select('#zoom-in').on('click', () => svg.call(zoom.scaleBy, 1.5, [W / 2, H / 2]));
+  d3.select('#zoom-out').on('click', () => svg.call(zoom.scaleBy, 1 / 1.5, [W / 2, H / 2]));
+  d3.select('#zoom-reset').on('click', () => svg.call(zoom.transform, d3.zoomIdentity));
+  d3.select(window).on('resize.layout', layout);
+  layout();
+  updateKey();
+  selectEvent(events[0]);
+  requestAnimationFrame(tick);
 })();
 </script>
 </body></html>

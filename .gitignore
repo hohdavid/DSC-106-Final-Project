@@ -1,0 +1,3 @@
+# Raw NASA GIBS downloads (download_globe.sh); make_globe_textures.py builds assets/globe/*.jpg from them
+assets/globe/raw/
+.DS_Store
