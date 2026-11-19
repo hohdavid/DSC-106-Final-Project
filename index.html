@@ -23,6 +23,9 @@ button:focus-visible, select:focus-visible, input:focus-visible, a:focus-visible
 
 /* ---- Fixed layers: WebGL globe, globe labels, then the interactive stage ---- */
 #globe { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; z-index: 0; }
+#globe { touch-action: pan-y; }
+.can-spin #globe { cursor: grab; }
+.spinning, .spinning * { cursor: grabbing !important; user-select: none; }
 #globe-overlay { position: fixed; inset: 0; width: 100vw; height: 100vh; z-index: 1; pointer-events: none; overflow: visible; }
 .no-webgl #globe { display: none; }
 .no-webgl body, .no-webgl { background: radial-gradient(circle at 70% 30%, #0d1830, #03060a 60%); }
@@ -314,7 +317,7 @@ void main() {
       <p class="kicker">NASA MODIS · five events</p>
       <h1>How do wildfires and floods change the landscape?</h1>
       <p class="subtitle">NASA MODIS Terra corrected reflectance, rendered by NASA GIBS at 960 × 640 px. Each event keeps one fixed area across 4–5 hand-picked dates; images are not otherwise processed.</p>
-      <p class="intro">Scroll to fly between five events on the globe. At each stop, drag the divider to compare two dates, and click one or more colors in the key to isolate them.</p>
+      <p class="intro">Scroll to fly between five events on the globe, or drag the globe to spin it. At each stop, drag the divider to compare two dates, and click one or more colors in the key to isolate them.</p>
       <p class="scroll-cue">Scroll to begin <span aria-hidden="true">↓</span></p>
     </div>
   </section>
@@ -761,8 +764,42 @@ void main() {
   stopButtons.on('click', (event, d) => scrollToStop(d));
 
   /* ---- Camera: where the globe looks, from scroll position and time ---- */
-  let heroLon = -100, outroLon = last.center[0], lastTime = performance.now();
-  const heroCenter = () => [heroLon, 18], outroCenter = () => [outroLon, 12];
+  let heroLon = -100, outroLon = last.center[0], heroLat = 18, outroLat = 12, lastTime = performance.now();
+  const heroCenter = () => [heroLon, heroLat], outroCenter = () => [outroLon, outroLat];
+
+  /* ---- Drag to spin the globe on the intro and about views ---- */
+  // Grab the globe (or the space around it) and drag: left/right spins it, up/down tilts it (mouse and pen;
+  // on touch screens only sideways drags spin, so vertical swipes still scroll the page). Letting go
+  // mid-swipe keeps it turning for a moment before the slow automatic spin takes over again.
+  let spinDrag = null, spinVel = 0;
+  const clampLat = lat => Math.max(-70, Math.min(70, lat));
+  const canSpinFrom = t => t === glCanvas || t === document.body || t === document.documentElement;
+  window.addEventListener('pointerdown', ev => {
+    const which = lastView && lastView.spin;
+    if (!which || flight || ev.button !== 0 || !canSpinFrom(ev.target)) return;
+    if (ev.pointerType === 'mouse') ev.preventDefault();      // no text selection while dragging
+    spinDrag = {id: ev.pointerId, which, x: ev.clientX, y: ev.clientY, t: performance.now(), tilt: ev.pointerType !== 'touch'};
+    spinVel = 0;
+    document.body.classList.add('spinning');
+  });
+  window.addEventListener('pointermove', ev => {
+    if (!spinDrag || ev.pointerId !== spinDrag.id) return;
+    const now = performance.now(), k = 180 / Math.PI / globeScale;   // degrees per pixel at the globe's center
+    const dLon = -(ev.clientX - spinDrag.x) * k, dLat = spinDrag.tilt ? (ev.clientY - spinDrag.y) * k : 0;
+    if (spinDrag.which === 'hero') { heroLon += dLon; heroLat = clampLat(heroLat + dLat); }
+    else { outroLon += dLon; outroLat = clampLat(outroLat + dLat); }
+    spinVel = 0.6 * spinVel + 0.4 * dLon / (Math.max(8, now - spinDrag.t) / 1000);
+    Object.assign(spinDrag, {x: ev.clientX, y: ev.clientY, t: now});
+  });
+  const endSpin = ev => {
+    if (!spinDrag || ev.pointerId !== spinDrag.id) return;
+    if (performance.now() - spinDrag.t > 80 || reduceMotion) spinVel = 0;   // paused before letting go: no fling
+    spinVel = Math.max(-120, Math.min(120, spinVel));
+    spinDrag = null;
+    document.body.classList.remove('spinning');
+  };
+  window.addEventListener('pointerup', endSpin);
+  window.addEventListener('pointercancel', endSpin);
   function eventView(e) {
     return {center: e.center, scale: e.scale, stretch: e.stretch, z: 1, A: e, B: null, worldA: e, worldB: e, mix: 0, comp: 1, target: e};
   }
@@ -786,7 +823,7 @@ void main() {
   // A flight from the top-bar buttons or the globe markers: zoom out of the current view, turn along the
   // great circle to the destination, zoom in. The destination is the view for the (already jumped-to)
   // scroll position, so when the flight ends the scroll-driven camera takes over with no jump.
-  let flight = null, lastView = null;
+  let flight = null, lastView = null, canSpin = false;
   function flightView(f, dest, p) {
     const a = f.from;
     const out = ease(clamp01(p / 0.4)), turn = ease(clamp01((p - 0.2) / 0.6)), inn = ease(clamp01((p - 0.6) / 0.4));
@@ -991,8 +1028,11 @@ void main() {
       if (p >= 1) flight = null; else v = flightView(flight, v, Math.max(0, p));
     }
     lastView = v;
-    if (!reduceMotion && v.spin === 'hero') heroLon -= 4 * dt;
-    if (!reduceMotion && v.spin === 'outro') outroLon -= 4 * dt;
+    const turn = spinDrag ? 0 : (reduceMotion ? 0 : -4 * dt) + spinVel * dt;   // auto spin + any fling
+    spinVel *= Math.exp(-dt * 2.2);
+    if (v.spin === 'hero') heroLon += turn;
+    if (v.spin === 'outro') outroLon += turn;
+    if (!!v.spin !== canSpin) { canSpin = !!v.spin; document.body.classList.toggle('can-spin', canSpin); }
     const key = [v.center[0].toFixed(4), v.center[1].toFixed(4), v.scale.toFixed(2), v.stretch.toFixed(4), v.mix.toFixed(3), v.comp.toFixed(3), band()].join();
     apply(v);
     if (key === lastKey) return; // nothing moved: skip redrawing the globe
